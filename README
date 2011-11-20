@@ -1,0 +1,48 @@
+Project Name: 
+	NodeActiveX
+	
+Author: 
+	Yuri Dursin
+	
+Creation Date: 	
+	2011-11-20
+	
+Last Modification: 
+	2011-11-22
+
+Description: 
+	Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
+	
+Requiements:
+	Visual Studio 2010 (with ATL headers)
+	Node.JS 0.6.1
+	
+Example:
+	require('activex');
+	var con = new ActiveXObject("ADODB.Connection");
+
+	// another usage:
+	// var ActiveX = require('activex');
+	// var con = new ActiveX.Object("ADODB.Connection");
+	
+	var dbf_path = "c:\\temp\\";
+	var dbf_file = "persons.dbf";
+	var dbf_constr = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + dbf_path + ";Extended Properties=\"DBASE IV;\"";
+
+	con.Open(dbf_constr, "", "");
+	con.Execute("Create Table " + dbf_file + " (Name char(50), City char(50), Phone char(20), Zip decimal(5))");
+	con.Execute("Insert into " + dbf_file + " Values('Иванов И.И.', 'Москва','123-45-67','14589')");
+	con.Execute("Insert into " + dbf_file + " Values('Поляков С.Л.', 'Москва','333-44-55','38215')");
+	con.Execute("Insert into " + dbf_file + " Values('Сидоров С.С.', 'Москва','222-33-44','54323')");
+
+	var rs = con.Execute("Select * from " + dbf_file); 
+	var fields = rs.Fields;
+	while (!rs.EOF.valueOf() /*???*/)
+	{ 
+	    var name = fields[0].value;
+		var town = fields[1].value;
+		var phone = fields[2].value;
+		var zip = fields[3].value;
+		console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);    
+		rs.MoveNext();
+	}
