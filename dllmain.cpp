@@ -43,6 +43,6 @@ extern "C" void NODE_EXTERN init (Handle<Object> target)
 	DispObject::NodeInit(target);
 }
 
-NODE_MODULE(moncon, init);
+NODE_MODULE(activex, init);
 
 //----------------------------------------------------------------------------------

@@ -12,10 +12,12 @@ Last Modification:
 
 Description: 
 	Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
+	Worked only with old version Node.JS for example 0.10.26
+	New versions Node.JS are not compatible with this extension format/
 	
 Requiements:
 	Visual Studio 2010 (with ATL headers)
-	Node.JS 0.6.1
+	Node.JS <=0.10.xx
 	
 Example:
 	require('activex');
@@ -31,9 +33,9 @@ Example:
 
 	con.Open(dbf_constr, "", "");
 	con.Execute("Create Table " + dbf_file + " (Name char(50), City char(50), Phone char(20), Zip decimal(5))");
-	con.Execute("Insert into " + dbf_file + " Values('Иванов И.И.', 'Москва','123-45-67','14589')");
-	con.Execute("Insert into " + dbf_file + " Values('Поляков С.Л.', 'Москва','333-44-55','38215')");
-	con.Execute("Insert into " + dbf_file + " Values('Сидоров С.С.', 'Москва','222-33-44','54323')");
+	con.Execute("Insert into " + dbf_file + " Values('John', 'London','123-45-67','14589')");
+	con.Execute("Insert into " + dbf_file + " Values('Andrew', 'Paris','333-44-55','38215')");
+	con.Execute("Insert into " + dbf_file + " Values('Romeo', 'Rom','222-33-44','54323')");
 
 	var rs = con.Execute("Select * from " + dbf_file); 
 	var fields = rs.Fields;
