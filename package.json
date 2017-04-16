@@ -1,0 +1,35 @@
+{
+  "name": "activex",
+  "version": "0.2.0",
+  "description": "Windows COM bindings",
+  "homepage": "https://github.com/durs/node-activex",
+  "keywords": [
+    "OLE", "COM", "ActiveX", "ActiveXObject", "CreateObject", "WSH", "WMI",
+    "Outlook", "Access", "Word", "Excel", "IE", "InternetExplorer"
+  ],
+  "author": {
+    "name": "durs",
+    "url": "https://github.com/durs",
+    "email": "yuri.dursin@gmail.com"
+  },
+  "contributors": [
+    "durs <yuri.dursin@gmail.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/durs/node-activex.git"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "mocha": ">= 1.8.1"
+  },
+  "engines": {
+    "node": ">= 4.0.0"
+  },
+  "scripts": {
+    "test": "nmake /a test"
+  },
+  "licenses": [{ "type": "BSD" }],
+  "main": "./lib/activex"
+}

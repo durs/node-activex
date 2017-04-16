@@ -1,14 +1,14 @@
 //-------------------------------------------------------------------------------------------------------
-// Project: NodeActiveX
+// Project: node-activex
 // Author: Yuri Dursin
-// Last Modification: 2011-11-22
-// Description: Example of using ActiveX addon for NodeJS
+// Last Modification: 2017-04-16
+// Description: Example of using ActiveX addon with ADO
 //-------------------------------------------------------------------------------------------------------
 
-require('./Release/activex'); 
-//require('./Debug/activex');
+require('../activex');
 
-var dbf_path = "c:\\temp\\";
+var path = require('path'); 
+var dbf_path = path.join(__dirname, '../tmp');
 var dbf_file = "persons.dbf";
 var dbf_constr = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + dbf_path + ";Extended Properties=\"DBASE IV;\"";
 
@@ -19,6 +19,7 @@ if (fso.FileExists(dbf_path + dbf_file)) fso.DeleteFile(dbf_path + dbf_file);
 
 console.log("Open connection");
 var con = new ActiveXObject("ADODB.Connection");
+console.log("ADO version: " + con.Version);
 con.Open(dbf_constr, "", "");
 
 console.log("Create new DBF file")
@@ -32,19 +33,21 @@ con.Execute("Insert into " + dbf_file + " Values('Romeo', 'Rom','222-33-44','543
 console.log("Select records from DBF")
 var rs = con.Execute("Select * from " + dbf_file); 
 var fields = rs.Fields;
+console.log("Resukt record count: " + rc.RecordCount);
+console.log("Resukt field count: " + fields.Count);
 
 //while (!rs.EOF)
-while (!rs.EOF.valueOf()/*???*/)
+while (!rs.EOF)
 { 
-    //name=  Persons.Fields("Name").value;
-    //town=  Persons.Fields("City").value;
-    //phone=Persons.Fields("Phone").value;
-    //zip=    Persons.Fields("Zip").value;    
+    var name = fields("Name").value;
+    var town = fields("City").value;
+    var phone = fields("Phone").value;
+    var zip = fields("Zip").value;    
 
-    var name = fields[0].value;
-    var town = fields[1].value;
-    var phone = fields[2].value;
-    var zip = fields[3].value;
+    //var name = fields[0].value;
+    //var town = fields[1].value;
+    //var phone = fields[2].value;
+    //var zip = fields[3].value;
 
     console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);
     

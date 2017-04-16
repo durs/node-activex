@@ -1,25 +1,9 @@
-Project Name: 
-	NodeActiveX
-	
-Author: 
-	Yuri Dursin
-	
-Creation Date: 	
-	2011-11-20
-	
-Last Modification: 
-	2011-11-22
+# NAME
 
-Description: 
-	Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
-	Worked only with old version Node.JS for example 0.10.26
-	New versions Node.JS are not compatible with this extension format/
-	
-Requiements:
-	Visual Studio 2010 (with ATL headers)
-	Node.JS <=0.10.xx
-	
-Example:
+Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
+
+# USAGE
+
 	require('activex');
 	var con = new ActiveXObject("ADODB.Connection");
 
@@ -48,3 +32,52 @@ Example:
 		console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);    
 		rs.MoveNext();
 	}
+
+# Tutorial and Examples
+
+
+# Other built in functions
+
+
+
+# FEATURES
+
+
+# API
+
+
+# BUILDING
+
+This project uses Visual C++ 2010 (or later) and Python 2.6 (or later).
+Bulding also requires node-gyp to be installed. You can do this with npm:
+
+    npm install -g node-gyp
+
+To obtain and build the bindings:
+
+    git clone git://github.com/durs/node-axtivex.git
+    cd node-activex
+    node-gyp configure
+    node-gyp build
+
+# TESTS
+
+[mocha](https://github.com/visionmedia/mocha) is required to run unit tests.
+
+    npm install -g mocha
+    nmake /a test
+
+
+# CONTRIBUTORS
+
+* [durs](https://github.com/durs)
+
+
+# ACKNOWLEDGEMENTS
+
+Inspired [Win32OLE](http://www.ruby-doc.org/stdlib/libdoc/win32ole/rdoc/)
+
+
+# LICENSE
+
+`node-win32ole` is [BSD licensed](https://github.com/idobatter/node-win32ole/raw/master/LICENSE).
