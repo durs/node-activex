@@ -1,6 +1,6 @@
 # NAME
 
-Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
+	Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
 
 # USAGE
 
@@ -11,7 +11,8 @@ Preview version Node.JS addon, that implements COM IDispatch object wrapper, ana
 	// var ActiveX = require('activex');
 	// var con = new ActiveX.Object("ADODB.Connection");
 	
-	var dbf_path = "c:\\temp\\";
+	var path = require('path'); 
+	var dbf_path = path.join(__dirname, '../tmp');
 	var dbf_file = "persons.dbf";
 	var dbf_constr = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + dbf_path + ";Extended Properties=\"DBASE IV;\"";
 
@@ -23,28 +24,14 @@ Preview version Node.JS addon, that implements COM IDispatch object wrapper, ana
 
 	var rs = con.Execute("Select * from " + dbf_file); 
 	var fields = rs.Fields;
-	while (!rs.EOF.valueOf() /*???*/)
-	{ 
-	    var name = fields[0].value;
-		var town = fields[1].value;
-		var phone = fields[2].value;
-		var zip = fields[3].value;
+	while (!rs.EOF) { 
+		var name = fields("Name").value;
+		var town = fields("City").value;
+		var phone = fields("Phone").value;
+		var zip = fields("Zip").value;   
 		console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);    
 		rs.MoveNext();
 	}
-
-# Tutorial and Examples
-
-
-# Other built in functions
-
-
-
-# FEATURES
-
-
-# API
-
 
 # BUILDING
 
@@ -60,24 +47,7 @@ To obtain and build the bindings:
     node-gyp configure
     node-gyp build
 
-# TESTS
-
-[mocha](https://github.com/visionmedia/mocha) is required to run unit tests.
-
-    npm install -g mocha
-    nmake /a test
-
-
 # CONTRIBUTORS
 
 * [durs](https://github.com/durs)
 
-
-# ACKNOWLEDGEMENTS
-
-Inspired [Win32OLE](http://www.ruby-doc.org/stdlib/libdoc/win32ole/rdoc/)
-
-
-# LICENSE
-
-`node-win32ole` is [BSD licensed](https://github.com/idobatter/node-win32ole/raw/master/LICENSE).
