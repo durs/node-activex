@@ -1,5 +1,5 @@
-var activex = module.exports = require('./build/Debug/node_activex');
+var ActiveX = module.exports = require('./build/Release/node_activex');
 
 global.ActiveXObject = function(id) {
-    return new activex.Object(id);
+    return new ActiveX.Object(id);
 };

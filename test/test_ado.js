@@ -8,9 +8,9 @@
 require('../activex');
 
 var path = require('path'); 
-var dbf_path = path.join(__dirname, '../tmp');
+var dbf_path = path.join(__dirname, '../tmp/');
 var dbf_file = "persons.dbf";
-var dbf_constr = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + dbf_path + ";Extended Properties=\"DBASE IV;\"";
+var dbf_constr = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + dbf_path + ";Extended Properties=\"DBASE IV;\"";
 
 console.log("Preapre directory and delete DBF file on exists");
 var fso = new ActiveXObject("Scripting.FileSystemObject");
@@ -33,13 +33,12 @@ con.Execute("Insert into " + dbf_file + " Values('Romeo', 'Rom','222-33-44','543
 console.log("Select records from DBF")
 var rs = con.Execute("Select * from " + dbf_file); 
 var fields = rs.Fields;
-console.log("Resukt record count: " + rc.RecordCount);
+console.log("Resukt record count: " + rs.RecordCount);
 console.log("Resukt field count: " + fields.Count);
 
-//while (!rs.EOF)
-while (!rs.EOF)
-{ 
-    var name = fields("Name").value;
+rs.MoveFirst();
+while (!rs.EOF.valueOf()) { 
+    var name = fields("Name").Value;
     var town = fields("City").value;
     var phone = fields("Phone").value;
     var zip = fields("Zip").value;    
@@ -50,7 +49,6 @@ while (!rs.EOF)
     //var zip = fields[3].value;
 
     console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);
-    
     rs.MoveNext();
 }
 

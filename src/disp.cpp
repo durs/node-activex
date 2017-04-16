@@ -61,6 +61,21 @@ Local<Value> DispObject::findElement(Isolate *isolate, LPOLESTR name)
 	IDispatch *pdisp = (disp) ? disp : owner_disp;
 	if (!pdisp || FAILED(DispFind(pdisp, name, &dispid))) return Undefined(isolate);
 	if (dispid == DISPID_UNKNOWN) return Undefined(isolate);
+
+    // Try preapre as property
+
+    /*
+    CComVariant ret;
+    if (DispInvoke(disp, dispid, 0, 0, &ret, DISPATCH_PROPERTYGET) == S_OK) {
+        if (ret.vt != VT_EMPTY && ret.vt != VT_ERROR) { // RecordSet.MoveNext return VT_EMPTY
+            if ((ret.vt & VT_TYPEMASK) != VT_DISPATCH) return Variant2Value(isolate, ret);
+            pdisp = ((ret.vt & VT_BYREF) != 0) ? *ret.ppdispVal : ret.pdispVal;
+            if (!pdisp) return Null(isolate);
+            return DispObject::NodeCreate(isolate, pdisp, name);
+        }
+    }
+    */
+
 	return DispObject::NodeCreate(isolate, disp, name, dispid);
 }
 
@@ -142,7 +157,8 @@ void DispObject::NodeInit(Handle<Object> target)
     Isolate *isolate = target->GetIsolate();
 
     // Prepare constructor template
-    Local<String> clazz_name(String::NewFromUtf8(isolate, "Object"));
+    Local<String> prop_name(String::NewFromUtf8(isolate, "Object"));
+    Local<String> clazz_name(String::NewFromUtf8(isolate, "Dispatch"));
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
     clazz->SetClassName(clazz_name);
  
@@ -152,15 +168,16 @@ void DispObject::NodeInit(Handle<Object> target)
     inst->SetIndexedPropertyHandler(NodeGetByIndex, NodeSetByIndex);
     inst->SetCallAsFunctionHandler(NodeCall);
 
+    //inst->SetAccessCheckCallback
     //inst->SetAccessCheckCallbacks(Engine::GetNamedItem, 0, )
     //inst.MakeWeak(0, DestroyInstance);
 
-    //NODE_SET_PROTOTYPE_METHOD(clazz, "test", toString);
-    //NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", valueOf);
+    //NODE_SET_PROTOTYPE_METHOD(clazz, "toString", NodeToString);
+    //NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", NodeValueOf);
 
     inst_template.Reset(isolate, inst);
     constructor.Reset(isolate, clazz->GetFunction());
-    target->Set(clazz_name, clazz->GetFunction());
+    target->Set(prop_name, clazz->GetFunction());
 
     //Context::GetCurrent()->Global()->Set(String::NewFromUtf8("ActiveXObject"), t->GetFunction());
 	NODE_DEBUG_MSG("DispObject initialized");
@@ -244,6 +261,7 @@ void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& 
     if (!id || !self) return;
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
     Local<Value> result;
+
     if (_wcsicmp(id, L"valueOf") == 0)
         result = FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction();
     else if (_wcsicmp(id, L"toString") == 0)
