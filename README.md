@@ -4,14 +4,27 @@
 
 # Features
 
-	Using ITypeInfo for conflict resolution between property and method 
-	(for example !rs.EOF not working without type information, becose need define EOF as an object) 
+ * Using *ITypeInfo* for conflict resolution between property and method 
+ (for example !rs.EOF not working without type information, becose need define EOF as an object) 
+
+ * Using optional parameters on constructor call    
+``` js 
+ 	var con = new ActiveX.Object("ADODB.Connection", {
+        async: true, // Allow asynchronius calls, true by default (for future usage)
+        type: true	// Allow using type information, true by default
+    });
+```
+
+ * Additional dignostic propeties:
+	- *__id* - dispatch identity, for exmplae: ADODB.Connection.@Execute.Fields
+	- *__value* - value of dispatch object, equiles valueOf()
+	- *__type* - full list type members names with their properties
 
 # Perspectives
 
-	Convert a JavaScript object to IDispatch
-	Asynchronius calls
-	Dispose method
+ * Convert a JavaScript object to IDispatch
+ * Asynchronius calls
+ * Dispose method
 
 # Usage example
 
