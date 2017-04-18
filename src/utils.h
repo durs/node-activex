@@ -183,7 +183,7 @@ inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIA
 
 //-------------------------------------------------------------------------------------------------------
 
-inline Local<Value> Variant2Value(Isolate *isolate, CComVariant &v)
+inline Local<Value> Variant2Value(Isolate *isolate, const CComVariant &v)
 {
 	VARTYPE vt = (v.vt & VT_TYPEMASK);
 	switch (vt)

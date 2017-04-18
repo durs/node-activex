@@ -11,14 +11,16 @@
 
 class DispInfo {
 public:
-	std::shared_ptr<DispInfo> parent;
+	std::weak_ptr<DispInfo> parent;
 	CComPtr<IDispatch> ptr;
 	bool prepared;
 
-    struct func_t { MEMBERID mid; INVOKEKIND kind; };
+    struct func_t { DISPID dispid; INVOKEKIND kind; };
 	typedef std::shared_ptr<func_t> func_ptr;
-	typedef std::map<std::wstring, func_ptr> func_map;
-	func_map funcs;
+	typedef std::map<DISPID, func_ptr> func_by_dispid_t;
+	//typedef std::map<std::wstring, func_ptr> func_by_name_t;
+	func_by_dispid_t funcs_by_dispid;
+	//func_by_name_t funcs_by_name;
 
 	inline DispInfo() : prepared(false) {}
 	inline DispInfo(IDispatch *disp) : prepared(false) { Prepare(disp); }
@@ -33,7 +35,7 @@ public:
 			}
 		}
 		ptr = disp;
-		prepared = (funcs.size() > 3 /*QueryInterface, AddRef, Release */);
+		prepared = (funcs_by_dispid.size() > 3 /*QueryInterface, AddRef, Release */);
 		return prepared;;
 	}
 
@@ -56,20 +58,30 @@ public:
 		UINT cnt_ret = 1;
 		if (info->GetNames(desc->memid, &name, 1, &cnt_ret) == S_OK && cnt_ret > 0 && (bool)name) {
 			func_ptr f(new func_t);
-            f->mid = desc->memid;
+            f->dispid = desc->memid;
             f->kind = desc->invkind;
-			funcs[std::wstring(name)] = f;
+			funcs_by_dispid[desc->memid] = f;
+			//funcs_by_name[std::wstring(name)] = f;
 		}
 		info->ReleaseFuncDesc(desc);
 		return true;
 	}
 
-	inline bool IsFunction(const std::wstring &name) {
-		if (!prepared) return true;
-		func_map::const_iterator it = funcs.find(name);
-		if (it == funcs.end()) return false;
-		return (it->second->kind & INVOKE_FUNC) != 0;
+	inline bool IsProperty(const DISPID dispid) {
+		if (!prepared) return false;
+		func_by_dispid_t::const_iterator it = funcs_by_dispid.find(dispid);
+		if (it == funcs_by_dispid.end()) return false;
+		return (it->second->kind & (INVOKE_PROPERTYGET | INVOKE_FUNC)) == INVOKE_PROPERTYGET;
 	}
+
+	/*
+	inline bool IsProperty(const std::wstring &name) {
+		if (!prepared) return false;
+		func_by_name_t::const_iterator it = funcs_by_name.find(name);
+		if (it == funcs_by_name.end()) return false;
+		return (it->second->kind & (INVOKE_PROPERTYGET | INVOKE_FUNC)) == INVOKE_PROPERTYGET;
+	}
+	*/
 
 	HRESULT FindProperty(LPOLESTR name, DISPID *dispid) {
 		return DispFind(ptr, name, dispid);
@@ -101,14 +113,14 @@ typedef std::shared_ptr<DispInfo> DispInfoPtr;
 class DispObject: public ObjectWrap
 {
 public:
-	//DispObject(IDispatch *ptr, LPCOLESTR name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
-	DispObject(const DispInfoPtr ptr, LPCOLESTR name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
+	DispObject(const DispInfoPtr &ptr, LPCOLESTR name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
 	~DispObject();
 
 	static void NodeInit(Handle<Object> target);
-	static Local<Object> NodeCreate(Isolate *isolate, const DispInfoPtr &ptr, LPCOLESTR name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
 
 private:
+	static Local<Object> NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, LPCOLESTR name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
+
 	static void NodeCreate(const FunctionCallbackInfo<Value> &args);
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
@@ -119,28 +131,24 @@ private:
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
 
 protected:
-	virtual Local<Value> find(Isolate *isolate, LPOLESTR name);
-	virtual Local<Value> find(Isolate *isolate, uint32_t index);
-	virtual Local<Value> valueOf(Isolate *isolate);
-	virtual Local<Value> toString(Isolate *isolate);
-	virtual bool set(Isolate *isolate, LPOLESTR name, Local<Value> value);
-	virtual void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
+	bool get(LPOLESTR name, uint32_t index, const PropertyCallbackInfo<Value> &args);
+	bool get(uint32_t index, const PropertyCallbackInfo<Value> &args);
+	bool set(Isolate *isolate, LPOLESTR name, Local<Value> value);
+	void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
+
+	HRESULT valueOf(Isolate *isolate, Local<Value> &value);
+	void toString(const FunctionCallbackInfo<Value> &args);
 
 private:
     static Persistent<ObjectTemplate> inst_template;
     static Persistent<Function> constructor;
 
-	enum State { None = 0, Prepared = 1, };
+	enum state_t { state_none = 0, state_prepared = 1, state_owned = 2 };
 	int state;
-	inline bool isPrepared() { return (state & Prepared) != 0; }
-	//inline bool isOwned() { return (bool)owner_disp; }
-
+	inline bool is_prepared() { return (state & state_prepared) != 0; }
+	inline bool is_owned() { return (state & state_owned) != 0; }
 
 	DispInfoPtr disp;
-	//DispInfoPtr owner_disp;
-
-	//CComPtr<IDispatch> disp;
-	//CComPtr<IDispatch> owner_disp;
 	std::wstring name;
 	DISPID dispid;
 	LONG index;

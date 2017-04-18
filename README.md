@@ -1,8 +1,19 @@
-# NAME
+# Name
 
-	Preview version Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject
+	Windows C++ Node.JS addon, that implements COM IDispatch object wrapper, analog ActiveXObject on cscript.exe
 
-# USAGE
+# Features
+
+	Using ITypeInfo for conflict resolution between property and method 
+	(for example !rs.EOF not working without type information, becose need define EOF as an object) 
+
+# Perspectives
+
+	Convert a JavaScript object to IDispatch
+	Asynchronius calls
+	Dispose method
+
+# Usage example
 
 	require('activex');
 	var con = new ActiveXObject("ADODB.Connection");
@@ -42,7 +53,7 @@
 	console.log("Resukt field count: " + fields.Count);
 
 	rs.MoveFirst();
-	while (!rs.EOF.valueOf()) { 
+	while (!rs.EOF) {
 		var name = fields("Name").value;
 		var town = fields("City").value;
 		var phone = fields("Phone").value;
@@ -53,12 +64,12 @@
 
 # BUILDING
 
-This project uses Visual C++ 2010 (or later) and Python 2.6 (or later).
+This project uses Visual C++ 2013 (or later versions then support C++11 standard) and Python 2.6 (or later).
 Bulding also requires node-gyp to be installed. You can do this with npm:
 
     npm install -g node-gyp
 
-To obtain and build the bindings:
+To obtain and build use console commands:
 
     git clone git://github.com/durs/node-axtivex.git
     cd node-activex
