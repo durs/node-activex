@@ -15,6 +15,7 @@
 
 # Usage example
 
+``` js
 	require('activex');
 	var con = new ActiveXObject("ADODB.Connection");
 
@@ -61,8 +62,9 @@
 		console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);    
 		rs.MoveNext();
 	}
+```
 
-# BUILDING
+# Building
 
 This project uses Visual C++ 2013 (or later versions then support C++11 standard) and Python 2.6 (or later).
 Bulding also requires node-gyp to be installed. You can do this with npm:

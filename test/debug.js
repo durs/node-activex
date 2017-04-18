@@ -21,11 +21,11 @@ function debug() {
     var str1 = fields[0].Value;    
 
     // Not worked!!!
-    var str2 = rs("Name");
+    //var str2 = rs("Name");
 
 	rs.MoveFirst();
 	while (!rs.EOF) { 
-		var name = fields[("Name")].value;
+		var name = fields("Name").value;
 		var town = fields("City").value;
 		var phone = fields("Phone").value;
 		var zip = fields("Zip").value;   

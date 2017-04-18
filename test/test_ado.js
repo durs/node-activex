@@ -37,7 +37,7 @@ console.log("Resukt record count: " + rs.RecordCount);
 console.log("Resukt field count: " + fields.Count);
 
 rs.MoveFirst();
-while (rs.EOF != true) { 
+while (!rs.EOF) { 
     var name = fields("Name").Value;
     var town = fields("City").value;
     var phone = fields("Phone").value;
