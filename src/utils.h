@@ -1,7 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // Project: NodeActiveX
 // Author: Yuri Dursin
-// Last Modification: 2017-04-16
 // Description: Common utilities for translation COM - NodeJS
 //-------------------------------------------------------------------------------------------------------
 
@@ -279,6 +278,16 @@ inline bool VariantDispGet(VARIANT *v, IDispatch **disp)
 		return true;
 	}
 	return false;
+}
+
+//-------------------------------------------------------------------------------------------------------
+
+inline bool v8val2bool(const Local<Value> &v, bool def) {
+    if (v.IsEmpty()) return def;
+    if (v->IsBoolean()) return v->BooleanValue();
+    if (v->IsInt32()) return v->Int32Value() != 0;
+    if (v->IsUint32()) return v->Uint32Value() != 0;
+    return def;
 }
 
 //-------------------------------------------------------------------------------------------------------
