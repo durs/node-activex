@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <string>
 #include <vector>
+#include <map>
+#include <memory>
 
 // Node JS headers
 #include <v8.h>
