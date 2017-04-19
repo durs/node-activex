@@ -8,7 +8,19 @@ var path = require('path');
 var tmp_path = path.join(__dirname, './tmp/');
 
 function debug() {
+    
     var ActiveX = require('./build/Debug/node_activex');
+
+    var my_obj = new ActiveX.Object({
+        text: 'dispatch object from javascript',
+        lines: ['dispatch', 'object', 'from', 'javascript'],
+        getText: function(i) {
+            if (arguments.length == 0) return text;
+            return this.lines[i];
+        }
+    });
+    var my_obj_text = my_obj.lines[0].valueOf();
+    var my_obj_text2 = my_obj.getText(3);
 
     //var fso = new ActiveX.Object("Scripting.FileSystemObject");
     //if (!fso.FolderExists(tmp_path)) fso.CreateFolder(tmp_path);
@@ -18,7 +30,7 @@ function debug() {
     var dbf_constr = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + tmp_path + ";Extended Properties=\"DBASE IV;\"";
     var con = new ActiveX.Object("ADODB.Connection", {
         async: true,
-        type: false
+        type: true
     });
     con.Open(dbf_constr, "", "");
     var rs = con.Execute("Select * from " + dbf_file); 

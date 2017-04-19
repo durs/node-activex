@@ -101,7 +101,7 @@ bool DispObject::set(Isolate *isolate, LPOLESTR name, Local<Value> value) {
 
 	// Set value using dispatch
     CComVariant ret;
-    VarArgumets vargs(value);
+    VarArguments vargs(value);
     size_t argcnt = vargs.items.size();
     VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
     HRESULT hrcode = disp->SetProperty(dispid, argcnt, pargs, &ret);
@@ -116,7 +116,7 @@ bool DispObject::set(Isolate *isolate, LPOLESTR name, Local<Value> value) {
 void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 {
 	CComVariant ret;
-	VarArgumets vargs(args);
+	VarArguments vargs(args);
 	size_t argcnt = vargs.items.size();
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	HRESULT hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
@@ -269,23 +269,44 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
         return;
     }
 
-    // Prepare arguments
-	Local<String> progid = args[0]->ToString();
-	String::Value vname(progid);
-	LPOLESTR name = (vname.length() > 0) ? (LPOLESTR)*vname : 0;
-
-    // Initialize COM object
+	// Create dispatch object from ProgId
+	HRESULT hrcode;
+	std::wstring name;
 	CComPtr<IDispatch> disp;
-	HRESULT hrcode = name ? disp.CoCreateInstance(name) : E_INVALIDARG;
-	if FAILED(hrcode) isolate->ThrowException(DispError(isolate, hrcode, L"CoCreateInstance"));
+	if (args[0]->IsString()) {
 
-	// Create object
-    else {
-        Local<Object> &self = args.This();
+		// Prepare arguments
+		Local<String> progid = args[0]->ToString();
+		String::Value vname(progid);
+		if (vname.length() <= 0) hrcode = E_INVALIDARG;
+		else {
+			name.assign((LPOLESTR)*vname, vname.length());
+			hrcode = disp.CoCreateInstance(name.c_str());
+		}
+	}
+
+	// Create dispatch object from javascript object
+	else if (args[0]->IsObject()) {
+		name = L"#";
+		disp = new DispObjectImpl(args[0]->ToObject());
+		hrcode = S_OK;
+	}
+
+	// Other
+	else {
+		hrcode = E_INVALIDARG;
+	}
+
+	// Prepare result
+	if FAILED(hrcode) {
+		isolate->ThrowException(DispError(isolate, hrcode, L"CreateInstance"));
+	}
+	else {
+		Local<Object> &self = args.This();
 		DispInfoPtr ptr(new DispInfo(disp, name, options));
 		(new DispObject(ptr, name))->Wrap(self);
-        args.GetReturnValue().Set(self);
-    }
+		args.GetReturnValue().Set(self);
+	}
 }
 
 void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& args) {
@@ -311,7 +332,10 @@ void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& 
     else if (_wcsicmp(id, L"__type") == 0) {
         args.GetReturnValue().Set(self->getTypeInfo(isolate));
     }
-    else if (_wcsicmp(id, L"valueOf") == 0) {
+	else if (_wcsicmp(id, L"__proto__") == 0) {
+		args.GetReturnValue().Set(constructor.Get(isolate));
+	}
+	else if (_wcsicmp(id, L"valueOf") == 0) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
