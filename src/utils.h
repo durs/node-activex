@@ -174,6 +174,36 @@ inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIA
 
 //-------------------------------------------------------------------------------------------------------
 
+template<typename INTTYPE>
+inline INTTYPE Variant2nt(const VARIANT &v) {
+    VARTYPE vt = (v.vt & VT_TYPEMASK);
+    switch (vt) {
+    case VT_EMPTY:
+    case VT_NULL:
+        return 0;
+    case VT_I1:
+    case VT_I2:
+    case VT_I4:
+    case VT_INT:
+        return (INTTYPE)v.lVal;
+    case VT_UI1:
+    case VT_UI2:
+    case VT_UI4:
+    case VT_UINT:
+        return (INTTYPE)v.ulVal;
+    case VT_R4:
+        return (INTTYPE)v.fltVal;
+    case VT_R8:
+        return (INTTYPE)v.dblVal;
+    case VT_DATE:
+        return (INTTYPE)v.date;
+    case VT_BOOL:
+        return (v.boolVal == VARIANT_TRUE) ? 1 : 0;
+    }
+    VARIANT dst;
+    return SUCCEEDED(VariantChangeType(&dst, &v, 0, VT_INT)) ? dst.intVal : 0;
+}
+
 inline Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v) {
 	VARTYPE vt = (v.vt & VT_TYPEMASK);
 	switch (vt) {
@@ -410,7 +440,7 @@ public:
 			Local<Object> target = val->ToObject();
 			if (target.IsEmpty()) return DISP_E_BADCALLEE;
 			VARIANT &key = pDispParams->rgvarg[0];
-			LONG index = VariantToInt(arg);
+			LONG index = Variant2nt<LONG>(key);
 			if (index >= 0) val = target->Get((uint32_t)index);
 			else val = target->Get(Variant2Value(isolate, key));
 		}
