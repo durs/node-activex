@@ -28,11 +28,26 @@
 
 class CComVariant : public VARIANT {
 public:
-    inline CComVariant() { vt = VT_EMPTY; }
-    inline CComVariant(const CComVariant &src) { VariantCopyInd(this, &src); }
-    inline CComVariant(const VARIANT &src) { VariantCopyInd(this, &src); }
-    inline CComVariant(LONG v) { vt = VT_I4; lVal = v; }
-    inline ~CComVariant() { if (vt != VT_EMPTY) VariantClear(this); }
+    inline CComVariant() { 
+		memset((VARIANT*)this, 0, sizeof(VARIANT));
+	}
+    inline CComVariant(const CComVariant &src) { 
+		memset((VARIANT*)this, 0, sizeof(VARIANT));
+		VariantCopyInd(this, &src);
+	}
+    inline CComVariant(const VARIANT &src) { 
+		memset((VARIANT*)this, 0, sizeof(VARIANT));
+		VariantCopyInd(this, &src);
+	}
+    inline CComVariant(LONG v) { 
+		memset((VARIANT*)this, 0, sizeof(VARIANT));
+		vt = VT_I4;
+		lVal = v; 
+	}
+    inline ~CComVariant() { 
+		if (vt != VT_EMPTY) 
+			VariantClear(this); 
+	}
 };
 
 class CComBSTR {
@@ -98,80 +113,46 @@ public:
 #endif
 //-------------------------------------------------------------------------------------------------------
 
-inline Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPOLESTR msg, LPOLESTR desc = 0)
-{
-	uint16_t buf[1024], *bufptr = buf;
-	size_t buflen = (sizeof(buf) / sizeof(uint16_t)) - 1;
-	if (msg) {
-		size_t msglen = wcslen(msg);
-		if (msglen > buflen) msglen = buflen;
-		if (msglen > 0) memcpy(bufptr, msg, msglen * sizeof(uint16_t));
-		buflen -= msglen;
-		bufptr += msglen;
-		if (buflen > 1) { 
-			bufptr[0] = ':'; 
-			bufptr[1] = ' '; 
-			buflen += 2; 
-			bufptr += 2; 
-		}
-	}
-	if (buflen > 0) {
-        DWORD len = desc ? wcslen(desc) : 0;
-        if (len > 0) {
-            if (len >= buflen) len = buflen - 1;
-            memcpy(bufptr, desc, len * sizeof(OLECHAR));
-        }
-        else {
-            len = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM, 0, hrcode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPOLESTR)bufptr, buflen, 0);
-            if (len == 0) len = swprintf_s((LPOLESTR)bufptr, buflen, L"Error 0x%08X", hrcode);
-        }
-		buflen -= len;
-		bufptr += len;
-	}
-	bufptr[0] = 0;
-	return String::NewFromTwoByte(isolate, buf);
+Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2 = 0, LPCOLESTR desc = 0);
+
+inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg = 0, LPCOLESTR msg2 = 0) {
+    return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg, msg2));
 }
 
-inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPOLESTR msg = 0)
-{
-    return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg));
-}
-
-inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPOLESTR msg = 0)
-{
+inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg = 0, LPCOLESTR msg2 = 0) {
     CComBSTR desc;
     CComPtr<IErrorInfo> errinfo;
     HRESULT hr = GetErrorInfo(0, &errinfo);
     if (hr == S_OK) errinfo->GetDescription(&desc);
-	return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg, desc));
+	return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg, msg2, desc));
 }
 
-inline Local<Value> TypeError(Isolate *isolate, const char *msg)
-{
+inline Local<Value> TypeError(Isolate *isolate, const char *msg) {
     return Exception::TypeError(String::NewFromUtf8(isolate, msg));
 }
 
-inline Local<Value> Error(Isolate *isolate, const char *msg)
-{
+inline Local<Value> Error(Isolate *isolate, const char *msg) {
     return Exception::Error(String::NewFromUtf8(isolate, msg));
 }
 
 //-------------------------------------------------------------------------------------------------------
 
-inline HRESULT DispFind(IDispatch *disp, LPOLESTR name, DISPID *dispid)
-{
+inline HRESULT DispFind(IDispatch *disp, LPOLESTR name, DISPID *dispid) {
 	LPOLESTR names[] = { name };
 	return disp->GetIDsOfNames(GUID_NULL, names, 1, 0, dispid);
 }
 
-inline HRESULT DispInvoke(IDispatch *disp, DISPID dispid, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD)
-{
+inline HRESULT DispInvoke(IDispatch *disp, DISPID dispid, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD) {
 	DISPPARAMS params = { args, 0, argcnt, 0 };
+	DISPID dispidNamed = DISPID_PROPERTYPUT;
+	if (flags == DISPATCH_PROPERTYPUT) { // It`s is a magic
+		params.cNamedArgs = 1;
+		params.rgdispidNamedArgs = &dispidNamed;
+	}
 	return disp->Invoke(dispid, IID_NULL, 0, flags, &params, ret, 0, 0);
 }
 
-inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD, DISPID *dispid = 0)
-{
+inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD, DISPID *dispid = 0) {
 	LPOLESTR names[] = { name };
     DISPID dispids[] = { 0 };
 	HRESULT hrcode = disp->GetIDsOfNames(GUID_NULL, names, 1, 0, dispids);
@@ -182,97 +163,49 @@ inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIA
 
 //-------------------------------------------------------------------------------------------------------
 
-inline Local<Value> Variant2Value(Isolate *isolate, const CComVariant &v)
-{
-	VARTYPE vt = (v.vt & VT_TYPEMASK);
-	switch (vt)
-	{
-	case VT_EMPTY:
-		return Undefined(isolate);
-	case VT_NULL:
-		return Null(isolate);
-	case VT_I1:
-	case VT_I2:
-	case VT_I4:
-	case VT_INT:
-		return Int32::New(isolate, v.lVal);
-	case VT_UI1:
-	case VT_UI2:
-	case VT_UI4:
-	case VT_UINT:
-		return Uint32::New(isolate, v.ulVal);
-
-	case VT_R4:
-		return Number::New(isolate, v.fltVal);
-
-	case VT_R8:
-		return Number::New(isolate, v.dblVal);
-
-	case VT_DATE:
-		return Date::New(isolate, v.date);
-
-	case VT_BOOL:
-		return Boolean::New(isolate, v.boolVal == VARIANT_TRUE);
-
-	case VT_BSTR:
-		return String::NewFromTwoByte(isolate, (uint16_t*)(((v.vt & VT_BYREF) != 0) ? *v.pbstrVal : v.bstrVal));
+template<typename INTTYPE>
+inline INTTYPE Variant2nt(const VARIANT &v, const INTTYPE def) {
+    VARTYPE vt = (v.vt & VT_TYPEMASK);
+	bool by_ref = (v.vt & VT_BYREF) != 0;
+    switch (vt) {
+    case VT_EMPTY:
+    case VT_NULL:
+        return def;
+    case VT_I1:
+    case VT_I2:
+    case VT_I4:
+    case VT_INT:
+        return (INTTYPE)(by_ref ? *v.plVal : v.lVal);
+    case VT_UI1:
+    case VT_UI2:
+    case VT_UI4:
+    case VT_UINT:
+        return (INTTYPE)(by_ref ? *v.pulVal : v.ulVal);
+    case VT_R4:
+        return (INTTYPE)(by_ref ? *v.pfltVal : v.fltVal);
+    case VT_R8:
+        return (INTTYPE)(by_ref ? *v.pdblVal : v.dblVal);
+    case VT_DATE:
+        return (INTTYPE)(by_ref ? *v.pdate : v.date);
+    case VT_BOOL:
+        return (v.boolVal == VARIANT_TRUE) ? 1 : 0;
+	case VT_VARIANT:
+		if (v.pvarVal) return Variant2nt<INTTYPE>(*v.pvarVal, def);
 	}
-	return Undefined(isolate);
+    VARIANT dst;
+    return SUCCEEDED(VariantChangeType(&dst, &v, 0, VT_INT)) ? (INTTYPE)dst.intVal : def;
 }
 
-inline void Value2Variant(Handle<Value> &val, VARIANT &var)
-{
-	if (val->IsUint32())
-	{
-		var.vt = VT_UI4;
-		var.ulVal = val->Uint32Value();
-	}
-	else if (val->IsInt32())
-	{
-		var.vt = VT_I4;
-		var.lVal = val->Int32Value();
-	}
-	else if (val->IsNumber())
-	{
-		var.vt = VT_R8;
-		var.dblVal = val->NumberValue();
-	}
-	else if (val->IsDate())
-	{
-		var.vt = VT_DATE;
-		var.date = val->NumberValue();
-	}
-	else if (val->IsBoolean())
-	{
-		var.vt = VT_BOOL;
-		var.boolVal = val->BooleanValue() ? VARIANT_TRUE : VARIANT_FALSE;
-	}
-	else if (val->IsUndefined())
-	{
-		var.vt = VT_EMPTY;
-	}
-	else if (val->IsNull())
-	{
-		var.vt = VT_NULL;
-	}
-	else
-	{
-		String::Value str(val);
-		var.vt = VT_BSTR;
-		var.bstrVal = (str.length() > 0) ? SysAllocString((LPOLESTR)*str) : 0;
-	}
-}
+Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v);
+void Value2Variant(Handle<Value> &val, VARIANT &var);
 
-inline bool VariantDispGet(VARIANT *v, IDispatch **disp)
-{
-	if ((v->vt & VT_TYPEMASK) == VT_DISPATCH)
-	{
+inline bool VariantDispGet(VARIANT *v, IDispatch **disp) {
+	if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
 		*disp = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
 		if (*disp) (*disp)->AddRef();
 		return true;
 	}
-	if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN)
-	{
+	if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
 		IUnknown *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
 		if (!unk || FAILED(unk->QueryInterface(__uuidof(IDispatch), (void**)disp))) *disp = 0;
 		return true;
@@ -292,22 +225,90 @@ inline bool v8val2bool(const Local<Value> &v, bool def) {
 
 //-------------------------------------------------------------------------------------------------------
 
-class VarArgumets
-{
+class VarArguments {
 public:
 	std::vector<CComVariant> items;
-	VarArgumets(Local<Value> value)
-	{
+	VarArguments(Local<Value> value) {
 		items.resize(1);
 		Value2Variant(value, items[0]);
 	}
-	VarArgumets(const FunctionCallbackInfo<Value> &args)
-	{
+	VarArguments(const FunctionCallbackInfo<Value> &args) {
 		int argcnt = args.Length();
 		items.resize(argcnt);
 		for (int i = 0; i < argcnt; i ++)
 			Value2Variant(args[argcnt - i - 1], items[i]);
 	}
+};
+
+class NodeArguments {
+public:
+	std::vector<Local<Value>> items;
+	NodeArguments(Isolate *isolate, DISPPARAMS *pDispParams) {
+		UINT argcnt = pDispParams->cArgs;
+		items.resize(argcnt);
+		for (UINT i = 0; i < argcnt; i++) {
+			items[i] = Variant2Value(isolate, pDispParams->rgvarg[argcnt - i - 1]);
+		}
+	}
+};
+
+//-------------------------------------------------------------------------------------------------------
+
+template<typename IBASE = IUnknown>
+class UnknownImpl : public IBASE {
+public:
+	inline UnknownImpl() : refcnt(0) {}
+	virtual ~UnknownImpl() {}
+
+	// IUnknown interface
+	virtual HRESULT __stdcall QueryInterface(REFIID qiid, void **ppvObject) {
+		if ((qiid == IID_IUnknown) || (qiid == __uuidof(IBASE))) {
+			*ppvObject = this;
+			AddRef();
+			return S_OK;
+		}
+		return E_NOINTERFACE;
+	}
+
+	virtual ULONG __stdcall AddRef() {
+		return InterlockedIncrement(&refcnt);
+	}
+
+	virtual ULONG __stdcall Release() {
+		if (InterlockedDecrement(&refcnt) != 0) return refcnt;
+		delete this;
+		return 0;
+	}
+
+protected:
+	LONG refcnt;
+
+};
+
+class DispObjectImpl : public UnknownImpl<IDispatch> {
+public:
+	Persistent<Object> obj;
+
+	struct name_t { 
+		DISPID dispid;
+		std::wstring name;
+		inline name_t(DISPID id, const std::wstring &nm): dispid(id), name(nm) {}
+	};
+	typedef std::shared_ptr<name_t> name_ptr;
+	typedef std::map<std::wstring, name_ptr> names_t;
+	typedef std::map<DISPID, name_ptr> index_t;
+	DISPID dispid_next;
+	names_t names;
+	index_t index;
+
+	inline DispObjectImpl(const Local<Object> &_obj) : obj(Isolate::GetCurrent(), _obj), dispid_next(1) {}
+	virtual ~DispObjectImpl() { obj.Reset(); }
+
+	// IDispatch interface
+	virtual HRESULT STDMETHODCALLTYPE GetTypeInfoCount(UINT *pctinfo) { *pctinfo = 0; return S_OK; }
+	virtual HRESULT STDMETHODCALLTYPE GetTypeInfo(UINT iTInfo, LCID lcid, ITypeInfo **ppTInfo) { return E_NOTIMPL; }
+	virtual HRESULT STDMETHODCALLTYPE GetIDsOfNames(REFIID riid, LPOLESTR *rgszNames, UINT cNames, LCID lcid, DISPID *rgDispId);
+	virtual HRESULT STDMETHODCALLTYPE Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr);
 };
 
 //-------------------------------------------------------------------------------------------------------

@@ -11,8 +11,9 @@
 enum options_t { 
     option_none = 0, 
     option_async = 0x01, 
-    option_type = 0x02 ,
-    option_prepared = 0x10,
+    option_type = 0x02,
+	option_activate = 0x04,
+	option_prepared = 0x10,
     option_owned = 0x20,
     option_mask = 0x0F
 };
@@ -24,7 +25,7 @@ public:
     std::wstring name;
 	int options;
 
-    struct func_t { DISPID dispid; INVOKEKIND kind; };
+    struct func_t { DISPID dispid; int kind; };
 	typedef std::shared_ptr<func_t> func_ptr;
 	typedef std::map<DISPID, func_ptr> func_by_dispid_t;
 	func_by_dispid_t funcs_by_dispid;
@@ -39,10 +40,15 @@ public:
 
     void Prepare(IDispatch *disp) {
         Enumerate([this](ITypeInfo *info, FUNCDESC *desc) {
-            func_ptr ptr(new func_t);
-            ptr->dispid = desc->memid;
-            ptr->kind = desc->invkind;
-            this->funcs_by_dispid[desc->memid] = ptr;
+			func_ptr &ptr = this->funcs_by_dispid[desc->memid];
+			if (!ptr) {
+				ptr.reset(new func_t);
+				ptr->dispid = desc->memid;
+				ptr->kind = desc->invkind;
+			}
+			else {
+				ptr->kind |= desc->invkind;
+			}
         });
         bool prepared = funcs_by_dispid.size() > 3; // QueryInterface, AddRef, Release
         if (prepared) options |= option_prepared;
@@ -141,8 +147,8 @@ private:
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
 
 protected:
-	bool get(LPOLESTR name, LONG index, const PropertyCallbackInfo<Value> &args);
-	bool set(Isolate *isolate, LPOLESTR name, Local<Value> value);
+	bool get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args);
+	bool set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args);
 	void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
 
 	HRESULT valueOf(Isolate *isolate, Local<Value> &value);
@@ -163,5 +169,5 @@ private:
 	DISPID dispid;
 	LONG index;
 
-	HRESULT Prepare(VARIANT *value = 0);
+	HRESULT prepare(VARIANT *value = 0);
 };
