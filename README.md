@@ -91,10 +91,15 @@ Or using fields by index
 	}
 ```
 
+# Tutorial and Examples
+
+- [examples/ado.js](https://github.com/durs/node-activex/blob/master/examples/ado.js)
+
 # Building
 
-This project uses Visual C++ 2013 (or later versions then support C++11 standard) and Python 2.6 (or later).
-Bulding also requires node-gyp to be installed. You can do this with npm:
+This project uses Visual C++ 2013 (or later versions then support C++11 standard).
+Bulding also requires node-gyp and python 2.6 (or later) to be installed. 
+You can do this with npm:
 
     npm install -g node-gyp
 
@@ -105,7 +110,14 @@ To obtain and build use console commands:
     node-gyp configure
     node-gyp build
 
-# CONTRIBUTORS
+# Tests
+
+[mocha](https://github.com/visionmedia/mocha) is required to run unit tests.
+
+    npm install -g mocha
+    mocha test
+
+# Contributors
 
 * [durs](https://github.com/durs)
 
