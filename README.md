@@ -34,7 +34,7 @@
 # Usage example
 
 Install packet throw NPM
-	npm install winax
+	`npm install winax
 
 Create ADO Connection throw global function
 ``` js
