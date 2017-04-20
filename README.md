@@ -9,10 +9,20 @@
 
  * Using optional parameters on constructor call    
 ``` js 
-	var con = new ActiveX.Object("ADODB.Connection", {
+	var con = new ActiveXObject("ADODB.Connection", {
 		activate: false, // Allow activate existance object instance, false by default
 		async: true, // Allow asynchronius calls, true by default (for future usage)
 		type: true	// Allow using type information, true by default
+	});
+```
+
+ * Create COM object from JS object and may be send as argument (for example send to Excel procedure)
+``` js 
+	var com_obj = new ActiveXObject({
+		text: test_value,
+		obj: { params: test_value },
+		arr: [ test_value, test_value, test_value ],
+		func: function(v) { return v*2; }
 	});
 ```
 
@@ -21,31 +31,19 @@
 	- *__value* - value of dispatch object, equiles valueOf()
 	- *__type* - full list type members names with their properties
 
- * Create COM object from JS object and may be send as argument (for example send to Excel procedure)
-``` js 
-	var com_obj = new ActiveX.Object({
-		text: test_value,
-		obj: { params: test_value },
-		arr: [ test_value, test_value, test_value ],
-		func: function(v) { return v*2; }
-	});
-```
-
-# Perspectives
-
- * Asynchronius calls
- * Dispose method
-
 # Usage example
+
+Install packet throw NPM
+	npm install winax
 
 Create ADO Connection throw global function
 ``` js
-	require('activex');
+	require('winax');
 	var con = new ActiveXObject('ADODB.Connection');
 ```
-Or using native Object prototype
+Or using Object prototype
 ``` js
-	var ActiveX = require('activex');
+	var ActiveX = require('winax');
 	var con = new ActiveX.Object('ADODB.Connection');
 ```
 Open connection and create simple table

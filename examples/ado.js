@@ -4,6 +4,7 @@
 // Description: Example of using ActiveX addon with ADO
 //-------------------------------------------------------------------------------------------------------
 
+//require('winax');
 require('../activex');
 
 var path = require('path'); 

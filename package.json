@@ -1,5 +1,5 @@
 {
-  "name": "activex",
+  "name": "winax",
   "version": "0.2.1",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
@@ -22,14 +22,17 @@
   "dependencies": {
   },
   "devDependencies": {
-    "mocha": ">= 3.0.1"
+    "mocha": ">= 3.0.0"
   },
   "engines": {
     "node": ">= 4.0.0"
   },
   "scripts": {
-    "test": "nmake /a test"
+    "test": "mocha test"
   },
-  "licenses": [{ "type": "BSD" }],
-  "main": "./lib/activex"
+  "license": "BSD",
+  "main": "./lib/activex",
+  "os": [ 
+    "win32"
+  ]
 }
