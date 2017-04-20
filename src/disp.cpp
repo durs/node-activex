@@ -28,7 +28,7 @@ DispObject::~DispObject() {
 	NODE_DEBUG_FMT("DispObject '%S' destructor", name.c_str());
 }
 
-HRESULT DispObject::Prepare(VARIANT *value) {
+HRESULT DispObject::prepare(VARIANT *value) {
 	CComVariant val; 
 	if (!value) value = &val;
 	HRESULT hrcode = disp->GetProperty(dispid, index, value);
@@ -48,9 +48,7 @@ HRESULT DispObject::Prepare(VARIANT *value) {
 
 bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
-
-	// Prepare 
-	if (!is_prepared()) Prepare();
+	if (!is_prepared()) prepare();
 
 	// Search dispid
     HRESULT hrcode;
@@ -63,20 +61,20 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
         hrcode = disp->FindProperty(tag, &propid);
         if (SUCCEEDED(hrcode) && propid == DISPID_UNKNOWN) hrcode = E_INVALIDARG;
         if FAILED(hrcode) {
-            isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind"));
+            isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind", tag));
             return false;
         }
     }
 
     // Return as property value
 	if (disp->IsProperty(propid)) {
-		CComPtr<IDispatch> ptr;
 		CComVariant value;
 		hrcode = disp->GetProperty(propid, index, &value);
 		if FAILED(hrcode) {
-			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyGet"));
+			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyGet", tag));
 			return false;
 		}
+		CComPtr<IDispatch> ptr;
 		if (VariantDispGet(&value, &ptr)) {
 			DispInfoPtr disp_result(new DispInfo(ptr, tag, options, &disp));
 			Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp_result, tag);
@@ -95,22 +93,53 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 	return true;
 }
 
-bool DispObject::set(Isolate *isolate, LPOLESTR name, Local<Value> value) {
-	// Prepare disp
-	if (!is_prepared()) Prepare();
+bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args) {
+	Isolate *isolate = args.GetIsolate();
+	if (!is_prepared()) prepare();
+
+	// Search dispid
+	HRESULT hrcode;
+	DISPID propid;
+	if (!tag) {
+		tag = (LPOLESTR)name.c_str();
+		propid = dispid;
+	}
+	else {
+		hrcode = disp->FindProperty(tag, &propid);
+		if (SUCCEEDED(hrcode) && propid == DISPID_UNKNOWN) hrcode = E_INVALIDARG;
+		if FAILED(hrcode) {
+			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind", tag));
+			return false;
+		}
+	}
 
 	// Set value using dispatch
     CComVariant ret;
     VarArguments vargs(value);
-    size_t argcnt = vargs.items.size();
+	if (index >= 0) vargs.items.push_back(CComVariant(index));
+	size_t argcnt = vargs.items.size();
     VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
-    HRESULT hrcode = disp->SetProperty(dispid, argcnt, pargs, &ret);
-	//HRESULT hrcode = DispInvoke(disp, name, 0, 0, &ret, DISPATCH_PROPERTYPUT, &dispid);
+	hrcode = disp->SetProperty(propid, argcnt, pargs, &ret);
 	if FAILED(hrcode) {
-		isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyPut"));
+		isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyPut", tag));
         return false;
     }
-    return true; // DispObject::NodeCreate(isolate, disp, name, dispid);
+
+	// Send result
+	CComPtr<IDispatch> ptr;
+	if (VariantDispGet(&ret, &ptr)) {
+		std::wstring rtag;
+		rtag.reserve(32);
+		rtag += L"@";
+		rtag += tag;
+		DispInfoPtr disp_result(new DispInfo(ptr, tag, options, &disp));
+		Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp_result, rtag);
+		args.GetReturnValue().Set(result);
+	}
+	else {
+		args.GetReturnValue().Set(Variant2Value(isolate, ret));
+	}
+    return true;
 }
 
 void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
@@ -121,7 +150,7 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	HRESULT hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
     if FAILED(hrcode) {
-        isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke"));
+        isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke", name.c_str()));
         return;
     }
 
@@ -144,7 +173,7 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 
 HRESULT DispObject::valueOf(Isolate *isolate, Local<Value> &value) {
 	CComVariant val;
-	HRESULT hrcode = Prepare(&val);
+	HRESULT hrcode = prepare(&val);
 	if SUCCEEDED(hrcode) value = Variant2Value(isolate, val);
 	return hrcode;
 }
@@ -152,7 +181,7 @@ HRESULT DispObject::valueOf(Isolate *isolate, Local<Value> &value) {
 void DispObject::toString(const FunctionCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
 	CComVariant val;
-	HRESULT hrcode = Prepare(&val);
+	HRESULT hrcode = prepare(&val);
 	if FAILED(hrcode) {
 		isolate->ThrowException(Win32Error(isolate, hrcode, L"DispToString"));
 		return;
@@ -255,7 +284,10 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
             if (!v8val2bool(opt->Get(String::NewFromUtf8(isolate, "type")), true)) {
                 options &= ~option_type;
             }
-        }
+			if (v8val2bool(opt->Get(String::NewFromUtf8(isolate, "activate")), false)) {
+				options |= option_activate;
+			}
+		}
     }
     
     // Invoked as plain function
@@ -281,7 +313,19 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 		if (vname.length() <= 0) hrcode = E_INVALIDARG;
 		else {
 			name.assign((LPOLESTR)*vname, vname.length());
-			hrcode = disp.CoCreateInstance(name.c_str());
+			CLSID clsid;
+			hrcode = CLSIDFromProgID(name.c_str(), &clsid);
+			if SUCCEEDED(hrcode) {
+				if ((options & option_activate) == 0) hrcode = E_FAIL; 
+				else {
+					CComPtr<IUnknown> unk;
+					hrcode = GetActiveObject(clsid, NULL, &unk);
+					if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
+				}
+				if FAILED(hrcode) {
+					hrcode = disp.CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER);
+				}
+			}
 		}
 	}
 
@@ -299,7 +343,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 
 	// Prepare result
 	if FAILED(hrcode) {
-		isolate->ThrowException(DispError(isolate, hrcode, L"CreateInstance"));
+		isolate->ThrowException(DispError(isolate, hrcode, L"CreateInstance", name.c_str()));
 	}
 	else {
 		Local<Object> &self = args.This();
@@ -367,8 +411,7 @@ void DispObject::NodeSet(Local<String> name, Local<Value> value, const PropertyC
 	String::Value vname(name);
 	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
 	NODE_DEBUG_FMT2("DispObject '%S.%S' set", self->name.c_str(), id);
-    if (self->set(isolate, id, value)) 
-        args.GetReturnValue().Set(args.This());
+    self->set(id, -1, value, args);
 }
 
 void DispObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
@@ -379,7 +422,7 @@ void DispObject::NodeSetByIndex(uint32_t index, Local<Value> value, const Proper
 		return;
 	}
 	NODE_DEBUG_FMT2("DispObject '%S[%u]' set", self->name.c_str(), index);
-	isolate->ThrowException(Win32Error(isolate, E_NOTIMPL, __FUNCTIONW__));
+	self->set(0, index, value, args);
 }
 
 void DispObject::NodeCall(const FunctionCallbackInfo<Value> &args) {

@@ -10,6 +10,7 @@
  * Using optional parameters on constructor call    
 ``` js 
 	var con = new ActiveX.Object("ADODB.Connection", {
+		activate: false, // Allow activate existance object instance, false by default
 		async: true, // Allow asynchronius calls, true by default (for future usage)
 		type: true	// Allow using type information, true by default
 	});
@@ -20,9 +21,18 @@
 	- *__value* - value of dispatch object, equiles valueOf()
 	- *__type* - full list type members names with their properties
 
+ * Create COM object from JS object and may be send as argument (for example send to Excel procedure)
+``` js 
+	var com_obj = new ActiveX.Object({
+		text: test_value,
+		obj: { params: test_value },
+		arr: [ test_value, test_value, test_value ],
+		func: function(v) { return v*2; }
+	});
+```
+
 # Perspectives
 
- * Convert a JavaScript object to IDispatch
  * Asynchronius calls
  * Dispose method
 

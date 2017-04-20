@@ -1,5 +1,5 @@
 .vscode
 node_modules
 build
-tmp
 npm-debug.log
+/data/PERSONS.DBF
