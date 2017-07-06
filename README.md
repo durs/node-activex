@@ -111,6 +111,12 @@ node-gyp configure
 node-gyp build
 ```
 
+For Electron users, need rebuild with a different V8 version:
+```
+npm rebuild winax --runtime=electron --target=1.4.3 --disturl=https://atom.io/download/atom-shell --build-from-source
+```
+See also Electron Documentation: [Using Native Node Modules](https://electron.atom.io/docs/tutorial/using-native-node-modules/)
+
 # Tests
 
 [mocha](https://github.com/visionmedia/mocha) is required to run unit tests.

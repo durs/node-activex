@@ -117,7 +117,7 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
     CComVariant ret;
     VarArguments vargs(value);
 	if (index >= 0) vargs.items.push_back(CComVariant(index));
-	size_t argcnt = vargs.items.size();
+	LONG argcnt = (LONG)vargs.items.size();
     VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	hrcode = disp->SetProperty(propid, argcnt, pargs, &ret);
 	if FAILED(hrcode) {
@@ -146,7 +146,7 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 {
 	CComVariant ret;
 	VarArguments vargs(args);
-	size_t argcnt = vargs.items.size();
+	LONG argcnt = (LONG)vargs.items.size();
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	HRESULT hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
     if FAILED(hrcode) {
