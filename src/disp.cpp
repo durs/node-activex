@@ -72,7 +72,8 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
         hrcode = disp->FindProperty(tag, &propid);
         if (SUCCEEDED(hrcode) && propid == DISPID_UNKNOWN) hrcode = E_INVALIDARG;
         if FAILED(hrcode) {
-            isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind", tag));
+            //isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind", tag));
+            args.GetReturnValue().SetUndefined();
             return false;
         }
     }

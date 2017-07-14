@@ -107,7 +107,10 @@ public:
 		CComVariant arg(index);
 		LONG argcnt = (index >= 0) ? 1 : 0;
 		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, &arg, value, DISPATCH_PROPERTYGET);
-		if FAILED(hrcode) value->vt = VT_EMPTY;
+        if FAILED(hrcode) {
+            value->vt = VT_EMPTY;
+            if (dispid == DISPID_VALUE) hrcode = S_OK;
+        }
 		return hrcode;
 	}
 

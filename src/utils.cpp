@@ -129,6 +129,90 @@ void Value2Variant(Handle<Value> &val, VARIANT &var) {
 	}
 }
 
+bool VariantDispGet(VARIANT *v, IDispatch **disp) {
+    if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
+        *disp = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
+        if (*disp) (*disp)->AddRef();
+        return true;
+    }
+    if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
+        IUnknown *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
+        if (unk) {
+            if SUCCEEDED(unk->QueryInterface(__uuidof(IDispatch), (void**)disp)) {
+                return true;
+            }
+            CComPtr<IEnumVARIANT> enum_ptr;
+            if SUCCEEDED(unk->QueryInterface(__uuidof(IEnumVARIANT), (void**)&enum_ptr)) {
+                *disp = new DispEnumImpl(enum_ptr);
+                (*disp)->AddRef();
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+//-------------------------------------------------------------------------------------------------------
+// DispEnumImpl implemetation
+
+HRESULT STDMETHODCALLTYPE DispEnumImpl::GetIDsOfNames(REFIID riid, LPOLESTR *rgszNames, UINT cNames, LCID lcid, DISPID *rgDispId) {
+    if (cNames != 1 || !rgszNames[0]) return DISP_E_UNKNOWNNAME;
+    LPOLESTR name = rgszNames[0];
+    if (wcscmp(name, L"Next") == 0) *rgDispId = 1;
+    else if (wcscmp(name, L"Skip") == 0) *rgDispId = 2;
+    else if (wcscmp(name, L"Reset") == 0) *rgDispId = 3;
+    else if (wcscmp(name, L"Clone") == 0) *rgDispId = 4;
+    else return DISP_E_UNKNOWNNAME;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE DispEnumImpl::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr) {
+    HRESULT hrcode = S_OK;
+    UINT argcnt = pDispParams->cArgs;
+    VARIANT *args = pDispParams->rgvarg;
+    switch (dispIdMember) {
+    case 1: {
+        CComArray arr;
+        ULONG fetched, celt = (argcnt > 0) ? Variant2nt(args[argcnt - 1], (ULONG)1) : 1;
+        if (!pVarResult || celt == 0) hrcode = E_INVALIDARG;
+        if SUCCEEDED(hrcode) hrcode = arr.Prepare(VT_VARIANT, celt);
+        if SUCCEEDED(hrcode) hrcode = ptr->Next(celt, arr.GetElement<VARIANT>(0), &fetched);
+        if SUCCEEDED(hrcode) {
+            if (fetched == 0) pVarResult->vt = VT_EMPTY;
+            else if (fetched == 1) {
+                VARIANT *v = arr.GetElement<VARIANT>(0);
+                *pVarResult = *v;
+                v->vt = VT_EMPTY;
+            }
+            else {
+                if (fetched < celt) hrcode = arr.Resize(fetched);
+                if SUCCEEDED(hrcode) arr.Detach(pVarResult);
+            }
+        }
+        return hrcode; }
+    case 2: {
+        if (pVarResult) pVarResult->vt = VT_EMPTY;
+        ULONG celt = (argcnt > 0) ? Variant2nt(args[argcnt - 1], (ULONG)1) : 1;
+        return ptr->Skip(celt); 
+        }
+    case 3: {
+        if (pVarResult) pVarResult->vt = VT_EMPTY;
+        return ptr->Reset(); 
+        }
+    case 4: {
+        if (!pVarResult) hrcode = E_INVALIDARG;
+        std::auto_ptr<DispEnumImpl> disp;
+        if SUCCEEDED(hrcode) hrcode = ptr->Clone(&disp->ptr);
+        if SUCCEEDED(hrcode) {
+            pVarResult->vt = VT_DISPATCH;
+            pVarResult->pdispVal = disp.release();
+            pVarResult->pdispVal->AddRef();
+        }
+        return hrcode; }
+    }
+    return E_NOTIMPL;
+}
+
 //-------------------------------------------------------------------------------------------------------
 // DispObjectImpl implemetation
 

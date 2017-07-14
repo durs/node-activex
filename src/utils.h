@@ -45,9 +45,35 @@ public:
 		lVal = v; 
 	}
     inline ~CComVariant() { 
-		if (vt != VT_EMPTY) 
-			VariantClear(this); 
+		Clear(); 
 	}
+    inline void Clear() {
+        if (vt != VT_EMPTY)
+            VariantClear(this);
+    }
+    inline void Detach(VARIANT *dst) {
+        *dst = *this;
+        vt = VT_EMPTY;
+    }
+};
+
+class CComArray : public CComVariant {
+public:
+    inline HRESULT Prepare(VARTYPE avt, ULONG cnt) {
+        Clear();
+        parray = SafeArrayCreateVector(avt, 0, cnt);
+        if (!parray) return E_UNEXPECTED;
+        vt = VT_ARRAY | avt;
+        return S_OK;
+    }
+    inline HRESULT Resize(ULONG cnt) {
+        SAFEARRAYBOUND bnds = { cnt, 0 };
+        return SafeArrayRedim(parray, &bnds);
+    }
+    template<typename T>
+    inline T* GetElement(ULONG index = 0) {
+        return ((T*)parray->pvData) + index;
+    }
 };
 
 class CComBSTR {
@@ -210,20 +236,7 @@ inline INTTYPE Variant2nt(const VARIANT &v, const INTTYPE def) {
 
 Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v);
 void Value2Variant(Handle<Value> &val, VARIANT &var);
-
-inline bool VariantDispGet(VARIANT *v, IDispatch **disp) {
-	if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
-		*disp = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
-		if (*disp) (*disp)->AddRef();
-		return true;
-	}
-	if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
-		IUnknown *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
-		if (!unk || FAILED(unk->QueryInterface(__uuidof(IDispatch), (void**)disp))) *disp = 0;
-		return true;
-	}
-	return false;
-}
+bool VariantDispGet(VARIANT *v, IDispatch **disp);
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -295,6 +308,19 @@ public:
 protected:
 	LONG refcnt;
 
+};
+
+class DispEnumImpl : public UnknownImpl<IDispatch> {
+public:
+    CComPtr<IEnumVARIANT> ptr;
+    DispEnumImpl() {}
+    DispEnumImpl(IEnumVARIANT *p) : ptr(p) {}
+
+    // IDispatch interface
+    virtual HRESULT STDMETHODCALLTYPE GetTypeInfoCount(UINT *pctinfo) { *pctinfo = 0; return S_OK; }
+    virtual HRESULT STDMETHODCALLTYPE GetTypeInfo(UINT iTInfo, LCID lcid, ITypeInfo **ppTInfo) { return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE GetIDsOfNames(REFIID riid, LPOLESTR *rgszNames, UINT cNames, LCID lcid, DISPID *rgDispId);
+    virtual HRESULT STDMETHODCALLTYPE Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr);
 };
 
 class DispObjectImpl : public UnknownImpl<IDispatch> {
