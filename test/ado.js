@@ -1,4 +1,4 @@
-require('../activex');
+var winax = require('../activex');
 
 var path = require('path'); 
 const assert = require('assert');
@@ -35,6 +35,7 @@ describe("ADODB.Connection", function() {
     it("create and open", function() {
         con = new ActiveXObject("ADODB.Connection");
         con.Open(constr, "", "");
+        this.test.title += ': ver=' + con.Version;
     });
 
     it("create and fill table", function() {
@@ -69,5 +70,22 @@ describe("ADODB.Connection", function() {
             assert.equal(cnt, reccnt); 
         }
     });
+    
+});
 
+describe("Release objects", function() {
+    
+    it("release", function() {
+        this.test.title += ': ' + winax.release(fso, con, rs, fields);
+    });
+
+    it("double release", function() {
+        this.test.title += ': ' + winax.release(fso, con, rs, fields);
+    });
+    
+    it("try call", function() {
+        if (con) try { this.test.title += ': SUCCESS (' + con.Version + ')'; }
+        catch(e) { this.test.title += ': FAILED (' + e.message + ')'; }
+    });
+    
 });

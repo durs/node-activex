@@ -140,6 +140,7 @@ private:
 	static void NodeCreate(const FunctionCallbackInfo<Value> &args);
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
+	static void NodeRelease(const FunctionCallbackInfo<Value> &args);
 	static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
 	static void NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
@@ -147,6 +148,7 @@ private:
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
 
 protected:
+	bool release();
 	bool get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args);
 	bool set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args);
 	void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
@@ -161,6 +163,7 @@ private:
     static Persistent<Function> constructor;
 
 	int options;
+	inline bool is_null() { return !disp; }
 	inline bool is_prepared() { return (options & option_prepared) != 0; }
 	inline bool is_owned() { return (options & option_owned) != 0; }
 

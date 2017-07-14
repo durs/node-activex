@@ -127,8 +127,20 @@ inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg = 
 	return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg, msg2, desc));
 }
 
+inline Local<Value> DispErrorNull(Isolate *isolate) {
+    return Exception::TypeError(String::NewFromUtf8(isolate, "DispNull"));
+}
+
+inline Local<Value> DispErrorInvalid(Isolate *isolate) {
+    return Exception::TypeError(String::NewFromUtf8(isolate, "DispInvalid"));
+}
+
 inline Local<Value> TypeError(Isolate *isolate, const char *msg) {
     return Exception::TypeError(String::NewFromUtf8(isolate, msg));
+}
+
+inline Local<Value> InvalidArgumentsError(Isolate *isolate) {
+    return Exception::TypeError(String::NewFromUtf8(isolate, "Invalid arguments"));
 }
 
 inline Local<Value> Error(Isolate *isolate, const char *msg) {

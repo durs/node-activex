@@ -45,8 +45,8 @@ var con = new ActiveXObject('ADODB.Connection');
 ```
 Or using Object prototype
 ``` js
-var ActiveX = require('winax');
-var con = new ActiveX.Object('ADODB.Connection');
+var winax = require('winax');
+var con = new winax.Object('ADODB.Connection');
 ```
 Open connection and create simple table
 ``` js
@@ -89,6 +89,10 @@ while (rs.EOF != false) {
 	console.log("> Person: " + name + " from " + town + " phone: " + phone + " zip: " + zip);    
 	rs.MoveNext();
 }
+```
+Release COM objects (but other temporary objects may be keep references too)
+``` js
+winax.release(con, rs, fields)
 ```
 
 # Tutorial and Examples

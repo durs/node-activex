@@ -31,7 +31,7 @@ DispObject::~DispObject() {
 HRESULT DispObject::prepare(VARIANT *value) {
 	CComVariant val; 
 	if (!value) value = &val;
-	HRESULT hrcode = disp->GetProperty(dispid, index, value);
+	HRESULT hrcode = disp ? disp->GetProperty(dispid, index, value) : E_UNEXPECTED;
 
 	// Init dispatch interface
 	if (!is_prepared()) {
@@ -46,9 +46,20 @@ HRESULT DispObject::prepare(VARIANT *value) {
 	return hrcode;
 }
 
+bool DispObject::release() {
+    if (!disp) return false;
+    NODE_DEBUG_FMT("DispObject '%S' release", name.c_str());
+    disp.reset();            
+    return true;
+}
+
 bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
 	if (!is_prepared()) prepare();
+    if (!disp) {
+        isolate->ThrowException(DispErrorNull(isolate));
+        return false;
+    }
 
 	// Search dispid
     HRESULT hrcode;
@@ -96,6 +107,10 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
 	if (!is_prepared()) prepare();
+    if (!disp) {
+        isolate->ThrowException(DispErrorNull(isolate));
+        return false;
+    }
 
 	// Search dispid
 	HRESULT hrcode;
@@ -142,8 +157,12 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
     return true;
 }
 
-void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
-{
+void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args) {
+    if (!disp) {
+        isolate->ThrowException(DispErrorNull(isolate));
+        return;
+    }
+    
 	CComVariant ret;
 	VarArguments vargs(args);
 	LONG argcnt = (LONG)vargs.items.size();
@@ -194,7 +213,7 @@ Local<Value> DispObject::getIdentity(Isolate *isolate) {
     id.reserve(128);
     id += name;
     DispInfoPtr ptr = disp;
-    if (ptr->name == id)
+    if (ptr && ptr->name == id)
         ptr = ptr->parent.lock();
     while (ptr) {
         id.insert(0, L".");
@@ -205,7 +224,7 @@ Local<Value> DispObject::getIdentity(Isolate *isolate) {
 }
 
 Local<Value> DispObject::getTypeInfo(Isolate *isolate) {
-    if ((options & option_type) == 0) {
+    if ((options & option_type) == 0 || !disp) {
         return Undefined(isolate);
     }
     uint32_t index = 0;
@@ -230,10 +249,8 @@ void DispObject::NodeInit(Handle<Object> target) {
     Isolate *isolate = target->GetIsolate();
 
     // Prepare constructor template
-    Local<String> prop_name(String::NewFromUtf8(isolate, "Object"));
-    Local<String> clazz_name(String::NewFromUtf8(isolate, "Dispatch"));
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
-    clazz->SetClassName(clazz_name);
+    clazz->SetClassName(String::NewFromUtf8(isolate, "Dispatch"));
 
 	NODE_SET_PROTOTYPE_METHOD(clazz, "toString", NodeToString);
 	NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", NodeValueOf);
@@ -249,8 +266,9 @@ void DispObject::NodeInit(Handle<Object> target) {
 
     inst_template.Reset(isolate, inst);
     constructor.Reset(isolate, clazz->GetFunction());
-    target->Set(prop_name, clazz->GetFunction());
-
+    target->Set(String::NewFromUtf8(isolate, "Object"), clazz->GetFunction());
+    target->Set(String::NewFromUtf8(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease, target)->GetFunction());
+    
     //Context::GetCurrent()->Global()->Set(String::NewFromUtf8("ActiveXObject"), t->GetFunction());
 	NODE_DEBUG_MSG("DispObject initialized");
 }
@@ -270,7 +288,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
     int argcnt = args.Length();
     if (argcnt < 1) {
-        isolate->ThrowException(TypeError(isolate, "innvalid arguments"));
+        isolate->ThrowException(InvalidArgumentsError(isolate));
         return;
     }
     int options = (option_async | option_type);
@@ -357,7 +375,7 @@ void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& 
     Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	
@@ -394,7 +412,7 @@ void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value
     Isolate *isolate = args.GetIsolate();
     DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
     NODE_DEBUG_FMT2("DispObject '%S[%u]' get", self->name.c_str(), index);
@@ -405,7 +423,7 @@ void DispObject::NodeSet(Local<String> name, Local<Value> value, const PropertyC
     Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	String::Value vname(name);
@@ -418,7 +436,7 @@ void DispObject::NodeSetByIndex(uint32_t index, Local<Value> value, const Proper
     Isolate *isolate = args.GetIsolate();
     DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	NODE_DEBUG_FMT2("DispObject '%S[%u]' set", self->name.c_str(), index);
@@ -429,7 +447,7 @@ void DispObject::NodeCall(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
     DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	NODE_DEBUG_FMT("DispObject '%S' call", self->name.c_str());
@@ -440,7 +458,7 @@ void DispObject::NodeValueOf(const FunctionCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	Local<Value> result;
@@ -456,10 +474,25 @@ void DispObject::NodeToString(const FunctionCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
-		isolate->ThrowException(Error(isolate, "DispIsEmpty"));
+		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	self->toString(args);
+}
+
+void DispObject::NodeRelease(const FunctionCallbackInfo<Value>& args) {
+	Isolate *isolate = args.GetIsolate();
+    int rcnt = 0, argcnt = args.Length();
+    for (int argi = 0; argi < argcnt; argi++) {
+        Local<Value> &obj = args[argi];
+        if (obj->IsObject()) {
+            Local<Object> disp_obj = obj->ToObject();
+            DispObject *disp = DispObject::Unwrap<DispObject>(disp_obj);
+            if (disp && disp->release())
+                rcnt ++;
+        }
+    }
+    args.GetReturnValue().Set(rcnt);
 }
 
 //-------------------------------------------------------------------------------------------------------

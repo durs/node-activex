@@ -21,6 +21,7 @@ namespace node_activex {
 //----------------------------------------------------------------------------------
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ulReason, LPVOID lpReserved) {
+	
     switch (ulReason) {
     case DLL_PROCESS_ATTACH:
         CoInitialize(0);
