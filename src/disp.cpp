@@ -8,7 +8,7 @@
 #include "disp.h"
 
 Persistent<ObjectTemplate> DispObject::inst_template;
-Persistent<Function> DispObject::constructor;
+Persistent<FunctionTemplate> DispObject::clazz_template;
 
 //-------------------------------------------------------------------------------------------------------
 // DispObject implemetation
@@ -28,19 +28,16 @@ DispObject::~DispObject() {
 	NODE_DEBUG_FMT("DispObject '%S' destructor", name.c_str());
 }
 
-HRESULT DispObject::prepare(VARIANT *value) {
-	CComVariant val; 
-	if (!value) value = &val;
-	HRESULT hrcode = disp ? disp->GetProperty(dispid, index, value) : E_UNEXPECTED;
+HRESULT DispObject::prepare() {
+	CComVariant value;
+	HRESULT hrcode = disp ? disp->GetProperty(dispid, index, &value) : E_UNEXPECTED;
 
 	// Init dispatch interface
-	if (!is_prepared()) {
-        options |= option_prepared;
-		CComPtr<IDispatch> ptr;
-		if (VariantDispGet(value, &ptr)) {
-			disp.reset(new DispInfo(ptr, name, options, &disp));
-			dispid = DISPID_VALUE;
-		}
+	options |= option_prepared;
+	CComPtr<IDispatch> ptr;
+	if (VariantDispGet(&value, &ptr)) {
+		disp.reset(new DispInfo(ptr, name, options, &disp));
+		dispid = DISPID_VALUE;
 	}
 
 	return hrcode;
@@ -131,7 +128,7 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
 
 	// Set value using dispatch
     CComVariant ret;
-    VarArguments vargs(value);
+    VarArguments vargs(isolate, value);
 	if (index >= 0) vargs.items.push_back(CComVariant(index));
 	LONG argcnt = (LONG)vargs.items.size();
     VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
@@ -165,7 +162,7 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
     }
     
 	CComVariant ret;
-	VarArguments vargs(args);
+	VarArguments vargs(isolate, args);
 	LONG argcnt = (LONG)vargs.items.size();
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	HRESULT hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
@@ -191,22 +188,47 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
     args.GetReturnValue().Set(result);
 }
 
-HRESULT DispObject::valueOf(Isolate *isolate, Local<Value> &value) {
-	CComVariant val;
-	HRESULT hrcode = prepare(&val);
-	if SUCCEEDED(hrcode) value = Variant2Value(isolate, val);
+HRESULT DispObject::valueOf(Isolate *isolate, VARIANT &value) {
+	if (!is_prepared()) prepare();
+	HRESULT hrcode;
+	if (!disp) hrcode = E_UNEXPECTED;
+	else if (is_object()) {
+		value.vt = VT_DISPATCH;
+		value.pdispVal = disp ? (IDispatch*)disp->ptr : NULL;
+		if (value.pdispVal) value.pdispVal->AddRef();
+		hrcode = S_OK;
+	}
+	else {
+		hrcode = disp->GetProperty(dispid, index, &value);
+	}
+	return hrcode;
+}
+
+HRESULT DispObject::valueOf(Isolate *isolate, const Local<Object> &self, Local<Value> &value) {
+	if (!is_prepared()) prepare();
+	HRESULT hrcode;
+	if (!disp) hrcode = E_UNEXPECTED;
+	else if (is_object()) {
+		value = self;
+		hrcode = S_OK;
+	}
+	else {
+		CComVariant val;
+		hrcode = disp->GetProperty(dispid, index, &val);
+		if SUCCEEDED(hrcode) value = Variant2Value(isolate, val);
+	}
 	return hrcode;
 }
 
 void DispObject::toString(const FunctionCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
 	CComVariant val;
-	HRESULT hrcode = prepare(&val);
+	HRESULT hrcode = valueOf(isolate, val);
 	if FAILED(hrcode) {
 		isolate->ThrowException(Win32Error(isolate, hrcode, L"DispToString"));
 		return;
 	}
-	args.GetReturnValue().Set(Variant2Value(isolate, val));
+	args.GetReturnValue().Set(Variant2String(isolate, val));
 }
 
 Local<Value> DispObject::getIdentity(Isolate *isolate) {
@@ -246,7 +268,7 @@ Local<Value> DispObject::getTypeInfo(Isolate *isolate) {
 //-----------------------------------------------------------------------------------
 // Static Node JS callbacks
 
-void DispObject::NodeInit(Handle<Object> target) {
+void DispObject::NodeInit(const Local<Object> &target) {
     Isolate *isolate = target->GetIsolate();
 
     // Prepare constructor template
@@ -266,7 +288,7 @@ void DispObject::NodeInit(Handle<Object> target) {
     inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__type"), NodeGet);
 
     inst_template.Reset(isolate, inst);
-    constructor.Reset(isolate, clazz->GetFunction());
+	clazz_template.Reset(isolate, clazz);
     target->Set(String::NewFromUtf8(isolate, "Object"), clazz->GetFunction());
     target->Set(String::NewFromUtf8(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease, target)->GetFunction());
     
@@ -311,10 +333,15 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     
     // Invoked as plain function
     if (!args.IsConstructCall()) {
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		if (clazz.IsEmpty()) {
+			isolate->ThrowException(TypeError(isolate, "FunctionTemplateIsEmpty"));
+			return;
+		}
         const int argc = 1;
         Local<Value> argv[argc] = { args[0] };
         Local<Context> context = isolate->GetCurrentContext();
-        Local<Function> cons = Local<Function>::New(isolate, constructor);
+        Local<Function> cons = Local<Function>::New(isolate, clazz->GetFunction());
         Local<Object> self = cons->NewInstance(context, argc, argv).ToLocalChecked();
         args.GetReturnValue().Set(self);
         return;
@@ -385,7 +412,7 @@ void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& 
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
     if (_wcsicmp(id, L"__value") == 0) {
         Local<Value> result;
-        HRESULT hrcode = self->valueOf(isolate, result);
+        HRESULT hrcode = self->valueOf(isolate, args.This(), result);
         if FAILED(hrcode) isolate->ThrowException(Win32Error(isolate, hrcode, L"DispValueOf"));
         else args.GetReturnValue().Set(result);
     }
@@ -396,7 +423,9 @@ void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& 
         args.GetReturnValue().Set(self->getTypeInfo(isolate));
     }
 	else if (_wcsicmp(id, L"__proto__") == 0) {
-		args.GetReturnValue().Set(constructor.Get(isolate));
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		if (clazz.IsEmpty()) args.GetReturnValue().SetNull();
+		else args.GetReturnValue().Set(clazz_template.Get(isolate)->GetFunction());
 	}
 	else if (_wcsicmp(id, L"valueOf") == 0) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());
@@ -463,7 +492,7 @@ void DispObject::NodeValueOf(const FunctionCallbackInfo<Value>& args) {
 		return;
 	}
 	Local<Value> result;
-	HRESULT hrcode = self->valueOf(isolate, result);
+	HRESULT hrcode = self->valueOf(isolate, args.This(), result);
 	if FAILED(hrcode) {
 		isolate->ThrowException(Win32Error(isolate, hrcode, L"DispValueOf"));
 		return;

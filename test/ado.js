@@ -33,6 +33,7 @@ describe("Scripting.FileSystemObject", function() {
 describe("ADODB.Connection", function() {
 
     it("create and open", function() {
+        this.timeout(5000);
         con = new ActiveXObject("ADODB.Connection");
         con.Open(constr, "", "");
         this.test.title += ': ver=' + con.Version;

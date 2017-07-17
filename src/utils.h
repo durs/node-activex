@@ -55,6 +55,9 @@ public:
         *dst = *this;
         vt = VT_EMPTY;
     }
+	inline HRESULT CopyTo(VARIANT *dst) {
+		return VariantCopy(dst, this);
+	}
 };
 
 class CComArray : public CComVariant {
@@ -103,7 +106,7 @@ public:
     T *p;
     inline CComPtr() : p(0) {}
     inline CComPtr(T *_p) : p(0) { Attach(_p); }
-    inline CComPtr(const CComPtr<T> &ppt) : p(0) { if (ptr.p) Attach(ptr.p); }
+    inline CComPtr(const CComPtr<T> &ptr) : p(0) { if (ptr.p) Attach(ptr.p); }
     inline ~CComPtr() { Release(); }
 
     inline void Attach(T *_p) { Release(); p = _p; if (p) p->AddRef(); }
@@ -202,7 +205,7 @@ inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIA
 //-------------------------------------------------------------------------------------------------------
 
 template<typename INTTYPE>
-inline INTTYPE Variant2nt(const VARIANT &v, const INTTYPE def) {
+inline INTTYPE Variant2Int(const VARIANT &v, const INTTYPE def) {
     VARTYPE vt = (v.vt & VT_TYPEMASK);
 	bool by_ref = (v.vt & VT_BYREF) != 0;
     switch (vt) {
@@ -228,15 +231,18 @@ inline INTTYPE Variant2nt(const VARIANT &v, const INTTYPE def) {
     case VT_BOOL:
         return (v.boolVal == VARIANT_TRUE) ? 1 : 0;
 	case VT_VARIANT:
-		if (v.pvarVal) return Variant2nt<INTTYPE>(*v.pvarVal, def);
+		if (v.pvarVal) return Variant2Int<INTTYPE>(*v.pvarVal, def);
 	}
     VARIANT dst;
     return SUCCEEDED(VariantChangeType(&dst, &v, 0, VT_INT)) ? (INTTYPE)dst.intVal : def;
 }
 
-Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v);
-void Value2Variant(Handle<Value> &val, VARIANT &var);
+Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v);
+Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp = false);
+Local<Value> Variant2String(Isolate *isolate, const VARIANT &v);
+void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var);
 bool VariantDispGet(VARIANT *v, IDispatch **disp);
+bool UnknownDispGet(IUnknown *unk, IDispatch **disp);
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -253,26 +259,26 @@ inline bool v8val2bool(const Local<Value> &v, bool def) {
 class VarArguments {
 public:
 	std::vector<CComVariant> items;
-	VarArguments(Local<Value> value) {
+	VarArguments(Isolate *isolate, Local<Value> value) {
 		items.resize(1);
-		Value2Variant(value, items[0]);
+		Value2Variant(isolate, value, items[0]);
 	}
-	VarArguments(const FunctionCallbackInfo<Value> &args) {
+	VarArguments(Isolate *isolate, const FunctionCallbackInfo<Value> &args) {
 		int argcnt = args.Length();
 		items.resize(argcnt);
 		for (int i = 0; i < argcnt; i ++)
-			Value2Variant(args[argcnt - i - 1], items[i]);
+			Value2Variant(isolate, args[argcnt - i - 1], items[i]);
 	}
 };
 
 class NodeArguments {
 public:
 	std::vector<Local<Value>> items;
-	NodeArguments(Isolate *isolate, DISPPARAMS *pDispParams) {
+	NodeArguments(Isolate *isolate, DISPPARAMS *pDispParams, bool allow_disp) {
 		UINT argcnt = pDispParams->cArgs;
 		items.resize(argcnt);
 		for (UINT i = 0; i < argcnt; i++) {
-			items[i] = Variant2Value(isolate, pDispParams->rgvarg[argcnt - i - 1]);
+			items[i] = Variant2Value(isolate, pDispParams->rgvarg[argcnt - i - 1], allow_disp);
 		}
 	}
 };
@@ -323,6 +329,10 @@ public:
     virtual HRESULT STDMETHODCALLTYPE Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr);
 };
 
+
+// {9DCE8520-2EFE-48C0-A0DC-951B291872C0}
+extern const GUID CLSID_DispObjectImpl;
+
 class DispObjectImpl : public UnknownImpl<IDispatch> {
 public:
 	Persistent<Object> obj;
@@ -341,6 +351,12 @@ public:
 
 	inline DispObjectImpl(const Local<Object> &_obj) : obj(Isolate::GetCurrent(), _obj), dispid_next(1) {}
 	virtual ~DispObjectImpl() { obj.Reset(); }
+
+	// IUnknown interface
+	virtual HRESULT __stdcall QueryInterface(REFIID qiid, void **ppvObject) {
+		if (qiid == CLSID_DispObjectImpl) { *ppvObject = this; return S_OK; }
+		return UnknownImpl<IDispatch>::QueryInterface(qiid, ppvObject);
+	}
 
 	// IDispatch interface
 	virtual HRESULT STDMETHODCALLTYPE GetTypeInfoCount(UINT *pctinfo) { *pctinfo = 0; return S_OK; }

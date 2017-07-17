@@ -15,7 +15,8 @@ enum options_t {
 	option_activate = 0x04,
 	option_prepared = 0x10,
     option_owned = 0x20,
-    option_mask = 0x0F
+	option_auto = (option_async | option_type),
+	option_mask = 0x0F
 };
 
 class DispInfo {
@@ -135,7 +136,24 @@ public:
 	DispObject(const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
 	~DispObject();
 
-	static void NodeInit(Handle<Object> target);
+	static Persistent<ObjectTemplate> inst_template;
+	static Persistent<FunctionTemplate> clazz_template;
+	static void NodeInit(const Local<Object> &target);
+	static bool HasInstance(Isolate *isolate, const Local<Value> &obj) {
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		return !clazz.IsEmpty() && clazz->HasInstance(obj);
+	}
+	static bool GetValueOf(Isolate *isolate, const Local<Object> &obj, VARIANT &value) {
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
+		DispObject *self = Unwrap<DispObject>(obj);
+		return self && SUCCEEDED(self->valueOf(isolate, value));
+	}
+	static Local<Object> NodeCreate(Isolate *isolate, IDispatch *disp, const std::wstring &name, int opt) {
+		Local<Object> parent;
+		DispInfoPtr ptr(new DispInfo(disp, name, opt));
+		return DispObject::NodeCreate(isolate, parent, ptr, name);
+	}
 
 private:
 	static Local<Object> NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
@@ -156,18 +174,17 @@ protected:
 	bool set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args);
 	void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
 
-	HRESULT valueOf(Isolate *isolate, Local<Value> &value);
+	HRESULT valueOf(Isolate *isolate, VARIANT &value);
+	HRESULT valueOf(Isolate *isolate, const Local<Object> &self, Local<Value> &value);
 	void toString(const FunctionCallbackInfo<Value> &args);
     Local<Value> getIdentity(Isolate *isolate);
     Local<Value> getTypeInfo(Isolate *isolate);
 
 private:
-    static Persistent<ObjectTemplate> inst_template;
-    static Persistent<Function> constructor;
-
 	int options;
 	inline bool is_null() { return !disp; }
 	inline bool is_prepared() { return (options & option_prepared) != 0; }
+	inline bool is_object() { return dispid == DISPID_VALUE && index < 0; }
 	inline bool is_owned() { return (options & option_owned) != 0; }
 
 	DispInfoPtr disp;
@@ -175,5 +192,5 @@ private:
 	DISPID dispid;
 	LONG index;
 
-	HRESULT prepare(VARIANT *value = 0);
+	HRESULT prepare();
 };

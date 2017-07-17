@@ -14,7 +14,8 @@ var com_obj, js_obj = {
     text: test_value,
     obj: { params: test_value },
     arr: [ test_value, test_value, test_value ],
-    func: function(v) { return v*2; }
+    func: function(v) { return v*2; },
+    func2: function(obj) { return obj.text; }
 };
 
 describe("COM from JS object", function() {
@@ -66,15 +67,20 @@ describe("COM from JS object", function() {
         if (com_obj) assert.equal(com_obj.func(test_func_arg), js_obj.func(test_func_arg));
     });
 
+    it("call method with object argument", function() {
+        if (com_obj) assert.equal(com_obj.func2(com_obj), js_obj.text);
+    });
 });
 
 describe("Excel with JS object", function() {
 
     it("create", function() {
+        this.timeout(5000);
         excel = new ActiveXObject("Excel.Application", { activate: true });
     });
 
     it("create workbook from test template", function() {
+        this.timeout(5000);
         if (excel) wbk = excel.Workbooks.Add(template_filename);
     });
 

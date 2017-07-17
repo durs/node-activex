@@ -7,6 +7,8 @@
 #include "stdafx.h"
 #include "disp.h"
 
+const GUID CLSID_DispObjectImpl = { 0x9dce8520, 0x2efe, 0x48c0,{ 0xa0, 0xdc, 0x95, 0x1b, 0x29, 0x18, 0x72, 0xc0 } };
+
 //-------------------------------------------------------------------------------------------------------
 
 Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2, LPCOLESTR desc) {
@@ -56,7 +58,23 @@ Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR 
 
 //-------------------------------------------------------------------------------------------------------
 
-Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v) {
+Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
+	if ((v.vt & VT_ARRAY) == 0) return Null(isolate);
+	SAFEARRAY *varr = (v.vt & VT_BYREF) != 0 ? *v.pparray : v.parray;
+	if (!varr || varr->cDims != 1) return Null(isolate);
+	LONG cnt = (LONG)varr->rgsabound[0].cElements;
+	Local<Array> arr = Array::New(isolate, cnt);
+	for (LONG i = 0; i < cnt; i++) {
+		CComVariant var;
+		if SUCCEEDED(SafeArrayGetElement(varr, &i, (VARIANT*)&var)) {
+			arr->Set((uint32_t)i, Variant2Value(isolate, v, true));
+		}
+	}
+	return arr;
+}
+
+Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) {
+	if ((v.vt & VT_ARRAY) != 0) return Variant2Array(isolate, v);
 	VARTYPE vt = (v.vt & VT_TYPEMASK);
 	bool by_ref = (v.vt & VT_BYREF) != 0;
 	switch (vt) {
@@ -80,17 +98,85 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v) {
 		return Date::New(isolate, by_ref ? *v.pdate : v.date);
 	case VT_BOOL:
 		return Boolean::New(isolate, (by_ref ? *v.pboolVal : v.boolVal) == VARIANT_TRUE);
-	case VT_DISPATCH:
+	case VT_DISPATCH: {
+		IDispatch *disp = (by_ref ? *v.ppdispVal : v.pdispVal);
+		if (!disp) return Null(isolate);
+		if (allow_disp) {
+			DispObjectImpl *impl;
+			if (disp->QueryInterface(CLSID_DispObjectImpl, (void**)&impl) == S_OK) {
+				return impl->obj.Get(isolate);
+			}
+			return DispObject::NodeCreate(isolate, disp, L"Dispatch", option_auto);
+		}
 		return String::NewFromUtf8(isolate, "[Dispatch]");
+	}
+	case VT_UNKNOWN: {
+		CComPtr<IDispatch> disp;
+		if (allow_disp && UnknownDispGet(((v.vt & VT_BYREF) != 0) ? *v.ppunkVal : v.punkVal, &disp)) {
+			return DispObject::NodeCreate(isolate, disp, L"Unknown", option_auto);
+		}
+		return String::NewFromUtf8(isolate, "[Unknown]");
+	}
 	case VT_BSTR:
 		return String::NewFromTwoByte(isolate, (uint16_t*)(by_ref ? *v.pbstrVal : v.bstrVal));
 	case VT_VARIANT: 
-		if (v.pvarVal) return Variant2Value(isolate, *v.pvarVal);
+		if (v.pvarVal) return Variant2Value(isolate, *v.pvarVal, allow_disp);
 	}
 	return Undefined(isolate);
 }
 
-void Value2Variant(Handle<Value> &val, VARIANT &var) {
+Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
+	char buf[256] = {};
+	VARTYPE vt = (v.vt & VT_TYPEMASK);
+	bool by_ref = (v.vt & VT_BYREF) != 0;
+	switch (vt) {
+	case VT_EMPTY:
+		strcpy(buf, "EMPTY");
+		break;
+	case VT_NULL:
+		strcpy(buf, "NULL");
+		break;
+	case VT_I1:
+	case VT_I2:
+	case VT_I4:
+	case VT_INT:
+		sprintf_s(buf, "%i", (int)(by_ref ? *v.plVal : v.lVal));
+		break;
+	case VT_UI1:
+	case VT_UI2:
+	case VT_UI4:
+	case VT_UINT:
+		sprintf_s(buf, "%u", (unsigned int)(by_ref ? *v.pulVal : v.ulVal));
+		break;
+	case VT_R4:
+		sprintf_s(buf, "%f", (double)(by_ref ? *v.pfltVal : v.fltVal));
+		break;
+	case VT_R8:
+		sprintf_s(buf, "%f", (double)(by_ref ? *v.pdblVal : v.dblVal));
+		break;
+	case VT_DATE:
+		return Date::New(isolate, by_ref ? *v.pdate : v.date);
+	case VT_BOOL:
+		strcpy(buf, ((by_ref ? *v.pboolVal : v.boolVal) == VARIANT_TRUE) ? "true" : "false");
+	case VT_DISPATCH:
+		strcpy(buf, "[Dispatch]");
+		break;
+	case VT_UNKNOWN: 
+		strcpy(buf, "[Unknown]");
+		break;
+	case VT_VARIANT:
+		if (v.pvarVal) return Variant2String(isolate, *v.pvarVal);
+		break;
+	default:
+		CComVariant tmp;
+		if (SUCCEEDED(VariantChangeType(&tmp, &v, 0, VT_BSTR)) && tmp.vt == VT_BSTR && v.bstrVal != nullptr) {
+			return String::NewFromTwoByte(isolate, (uint16_t*)v.bstrVal);
+		}
+	}
+	return String::NewFromUtf8(isolate, buf, String::kNormalString);
+}
+
+void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var) {
 	if (val.IsEmpty() || val->IsUndefined()) {
 		var.vt = VT_EMPTY;
 	}
@@ -118,15 +204,32 @@ void Value2Variant(Handle<Value> &val, VARIANT &var) {
 		var.boolVal = val->BooleanValue() ? VARIANT_TRUE : VARIANT_FALSE;
 	}
 	else if (val->IsObject()) {
-		var.vt = VT_DISPATCH;
-		var.pdispVal = new DispObjectImpl(val->ToObject());
-		var.pdispVal->AddRef();
+		Local<Object> obj = val->ToObject();
+		if (!DispObject::GetValueOf(isolate, obj, var)) {
+			var.vt = VT_DISPATCH;
+			var.pdispVal = new DispObjectImpl(obj);
+			var.pdispVal->AddRef();
+		}
 	}
 	else {
 		String::Value str(val);
 		var.vt = VT_BSTR;
 		var.bstrVal = (str.length() > 0) ? SysAllocString((LPOLESTR)*str) : 0;
 	}
+}
+
+bool UnknownDispGet(IUnknown *unk, IDispatch **disp) {
+	if (!unk) return false;
+	if SUCCEEDED(unk->QueryInterface(__uuidof(IDispatch), (void**)disp)) {
+		return true;
+	}
+	CComPtr<IEnumVARIANT> enum_ptr;
+	if SUCCEEDED(unk->QueryInterface(__uuidof(IEnumVARIANT), (void**)&enum_ptr)) {
+		*disp = new DispEnumImpl(enum_ptr);
+		(*disp)->AddRef();
+		return true;
+	}
+	return false;
 }
 
 bool VariantDispGet(VARIANT *v, IDispatch **disp) {
@@ -136,18 +239,7 @@ bool VariantDispGet(VARIANT *v, IDispatch **disp) {
         return true;
     }
     if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
-        IUnknown *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
-        if (unk) {
-            if SUCCEEDED(unk->QueryInterface(__uuidof(IDispatch), (void**)disp)) {
-                return true;
-            }
-            CComPtr<IEnumVARIANT> enum_ptr;
-            if SUCCEEDED(unk->QueryInterface(__uuidof(IEnumVARIANT), (void**)&enum_ptr)) {
-                *disp = new DispEnumImpl(enum_ptr);
-                (*disp)->AddRef();
-                return true;
-            }
-        }
+		return UnknownDispGet(((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal, disp);
     }
     return false;
 }
@@ -173,7 +265,7 @@ HRESULT STDMETHODCALLTYPE DispEnumImpl::Invoke(DISPID dispIdMember, REFIID riid,
     switch (dispIdMember) {
     case 1: {
         CComArray arr;
-        ULONG fetched, celt = (argcnt > 0) ? Variant2nt(args[argcnt - 1], (ULONG)1) : 1;
+        ULONG fetched, celt = (argcnt > 0) ? Variant2Int(args[argcnt - 1], (ULONG)1) : 1;
         if (!pVarResult || celt == 0) hrcode = E_INVALIDARG;
         if SUCCEEDED(hrcode) hrcode = arr.Prepare(VT_VARIANT, celt);
         if SUCCEEDED(hrcode) hrcode = ptr->Next(celt, arr.GetElement<VARIANT>(0), &fetched);
@@ -192,7 +284,7 @@ HRESULT STDMETHODCALLTYPE DispEnumImpl::Invoke(DISPID dispIdMember, REFIID riid,
         return hrcode; }
     case 2: {
         if (pVarResult) pVarResult->vt = VT_EMPTY;
-        ULONG celt = (argcnt > 0) ? Variant2nt(args[argcnt - 1], (ULONG)1) : 1;
+        ULONG celt = (argcnt > 0) ? Variant2Int(args[argcnt - 1], (ULONG)1) : 1;
         return ptr->Skip(celt); 
         }
     case 3: {
@@ -245,7 +337,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 	if ((wFlags & DISPATCH_PROPERTYPUT) != 0) {
 		UINT argcnt = pDispParams->cArgs;
 		VARIANT *key = (argcnt > 1) ? &pDispParams->rgvarg[--argcnt] : nullptr;
-		if (argcnt > 0) val = Variant2Value(isolate, pDispParams->rgvarg[--argcnt]);
+		if (argcnt > 0) val = Variant2Value(isolate, pDispParams->rgvarg[--argcnt], true);
 		else val = Undefined(isolate);
 		bool rcode;
 
@@ -265,9 +357,9 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 				if (target.IsEmpty()) return DISP_E_BADCALLEE;
 			}
 
-			LONG index = Variant2nt<LONG>(*key, -1);
+			LONG index = Variant2Int<LONG>(*key, -1);
 			if (index >= 0) rcode = target->Set((uint32_t)index, val);
-			else rcode = target->Set(Variant2Value(isolate, *key), val);
+			else rcode = target->Set(Variant2Value(isolate, *key, false), val);
 		}
 
 		// Store result
@@ -285,7 +377,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 	// Call property as method
 	if ((wFlags & DISPATCH_METHOD) != 0) {
 		wFlags = 0;
-		NodeArguments args(isolate, pDispParams);
+		NodeArguments args(isolate, pDispParams, true);
 		int argcnt = (int)args.items.size();
 		Local<Value> *argptr = (argcnt > 0) ? &args.items[0] : nullptr;
 		if (val->IsFunction()) {
@@ -310,9 +402,9 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 			if (!val.IsEmpty()) target = Local<Object>::Cast(val);
 			if (target.IsEmpty()) return DISP_E_BADCALLEE;
 			VARIANT &key = pDispParams->rgvarg[0];
-			LONG index = Variant2nt<LONG>(key, -1);
+			LONG index = Variant2Int<LONG>(key, -1);
 			if (index >= 0) ret = target->Get((uint32_t)index);
-			else ret = target->Get(Variant2Value(isolate, key));
+			else ret = target->Get(Variant2Value(isolate, key, false));
 		}
 		else {
 			ret = val;
@@ -321,7 +413,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 
 	// Store result
 	if (pVarResult) {
-		Value2Variant(ret, *pVarResult);
+		Value2Variant(isolate, ret, *pVarResult);
 	}
 	return S_OK;
 }
