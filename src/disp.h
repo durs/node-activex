@@ -26,7 +26,7 @@ public:
     std::wstring name;
 	int options;
 
-    struct func_t { DISPID dispid; int kind; };
+	struct func_t { DISPID dispid; int kind; int argcnt; };
 	typedef std::shared_ptr<func_t> func_ptr;
 	typedef std::map<DISPID, func_ptr> func_by_dispid_t;
 	func_by_dispid_t funcs_by_dispid;
@@ -46,9 +46,12 @@ public:
 				ptr.reset(new func_t);
 				ptr->dispid = desc->memid;
 				ptr->kind = desc->invkind;
+				ptr->argcnt = desc->cParams;
 			}
 			else {
 				ptr->kind |= desc->invkind;
+				if (desc->cParams > ptr->argcnt) 
+					ptr->argcnt = desc->cParams;
 			}
         });
         bool prepared = funcs_by_dispid.size() > 3; // QueryInterface, AddRef, Release
@@ -97,7 +100,8 @@ public:
 		if ((options & option_prepared) == 0) return false;
 		func_by_dispid_t::const_iterator it = funcs_by_dispid.find(dispid);
 		if (it == funcs_by_dispid.end()) return false;
-		return (it->second->kind & (INVOKE_PROPERTYGET | INVOKE_FUNC)) == INVOKE_PROPERTYGET;
+		func_ptr ptr = it->second;
+		return (((ptr->kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_PROPERTYGET) && (ptr->argcnt == 0);
 	}
 
 	HRESULT FindProperty(LPOLESTR name, DISPID *dispid) {
