@@ -13,8 +13,8 @@ Persistent<FunctionTemplate> DispObject::clazz_template;
 //-------------------------------------------------------------------------------------------------------
 // DispObject implemetation
 
-DispObject::DispObject(const DispInfoPtr &ptr, const std::wstring &nm, DISPID id, LONG indx)
-	: disp(ptr), options(ptr->options & option_mask), name(nm), dispid(id), index(indx)
+DispObject::DispObject(const DispInfoPtr &ptr, const std::wstring &nm, DISPID id, LONG indx, int opt)
+	: disp(ptr), options((ptr->options & option_mask) | opt), name(nm), dispid(id), index(indx)
 {	
 	if (dispid == DISPID_UNKNOWN) {
 		dispid = DISPID_VALUE;
@@ -61,32 +61,58 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 	// Search dispid
     HRESULT hrcode;
     DISPID propid;
+	bool prop_by_key = false;
     if (!tag) {
         tag = (LPOLESTR)name.c_str();
         propid = dispid;
     }
-    else {
+	else {
         hrcode = disp->FindProperty(tag, &propid);
         if (SUCCEEDED(hrcode) && propid == DISPID_UNKNOWN) hrcode = E_INVALIDARG;
         if FAILED(hrcode) {
-            //isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind", tag));
-            args.GetReturnValue().SetUndefined();
-            return false;
+			prop_by_key = (options & option_property) != 0;
+			if (!prop_by_key) {
+				//isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyFind", tag));
+				args.GetReturnValue().SetUndefined();
+				return false;
+			}
+			propid = dispid;
         }
     }
 
+	// Check type info
+	int opt = 0;
+	bool is_property_simple = false;
+	if (prop_by_key) {
+		is_property_simple = true;
+		opt |= option_property;
+	}
+	else {
+		DispInfo::type_ptr disp_info;
+		if (disp->GetTypeInfo(propid, disp_info)) {
+			if (disp_info->is_property()) opt |= option_property;
+			is_property_simple = disp_info->is_property_simple();
+		}
+	}
+
     // Return as property value
-	if (disp->IsProperty(propid)) {
+	if (is_property_simple) {
 		CComVariant value;
-		hrcode = disp->GetProperty(propid, index, &value);
-		if FAILED(hrcode) {
+		VarArguments vargs;
+		if (prop_by_key) vargs.items.push_back(CComVariant(tag));
+		if (index >= 0) vargs.items.push_back(CComVariant(index));
+		LONG argcnt = (LONG)vargs.items.size();
+		VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
+		//hrcode = disp->GetProperty(propid, index, &value);
+		hrcode = disp->GetProperty(propid, argcnt, pargs, &value);
+		if (FAILED(hrcode) && dispid != DISPID_VALUE){
 			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyGet", tag));
 			return false;
 		}
 		CComPtr<IDispatch> ptr;
 		if (VariantDispGet(&value, &ptr)) {
 			DispInfoPtr disp_result(new DispInfo(ptr, tag, options, &disp));
-			Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp_result, tag);
+			Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp_result, tag, DISPID_UNKNOWN, -1, opt);
 			args.GetReturnValue().Set(result);
 		}
 		else {
@@ -96,7 +122,7 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 
 	// Return as dispatch object 
 	else {
-		Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp, tag, propid, index);
+		Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp, tag, propid, index, opt);
 		args.GetReturnValue().Set(result);
 	}
 	return true;
@@ -109,7 +135,7 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
         isolate->ThrowException(DispErrorNull(isolate));
         return false;
     }
-
+	
 	// Search dispid
 	HRESULT hrcode;
 	DISPID propid;
@@ -128,7 +154,7 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
 
 	// Set value using dispatch
     CComVariant ret;
-    VarArguments vargs(isolate, value);
+	VarArguments vargs(isolate, value);
 	if (index >= 0) vargs.items.push_back(CComVariant(index));
 	LONG argcnt = (LONG)vargs.items.size();
     VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
@@ -165,7 +191,10 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 	VarArguments vargs(isolate, args);
 	LONG argcnt = (LONG)vargs.items.size();
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
-	HRESULT hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
+	HRESULT hrcode;
+
+	if ((options & option_property) == 0) hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
+	else hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret);
     if FAILED(hrcode) {
         isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke", name.c_str()));
         return;
@@ -192,14 +221,14 @@ HRESULT DispObject::valueOf(Isolate *isolate, VARIANT &value) {
 	if (!is_prepared()) prepare();
 	HRESULT hrcode;
 	if (!disp) hrcode = E_UNEXPECTED;
-	else if (is_object()) {
-		value.vt = VT_DISPATCH;
-		value.pdispVal = disp ? (IDispatch*)disp->ptr : NULL;
-		if (value.pdispVal) value.pdispVal->AddRef();
-		hrcode = S_OK;
-	}
 	else {
 		hrcode = disp->GetProperty(dispid, index, &value);
+		if (FAILED(hrcode) && is_object()) {
+			value.vt = VT_DISPATCH;
+			value.pdispVal = disp ? (IDispatch*)disp->ptr : NULL;
+			if (value.pdispVal) value.pdispVal->AddRef();
+			hrcode = S_OK;
+		}
 	}
 	return hrcode;
 }
@@ -208,14 +237,14 @@ HRESULT DispObject::valueOf(Isolate *isolate, const Local<Object> &self, Local<V
 	if (!is_prepared()) prepare();
 	HRESULT hrcode;
 	if (!disp) hrcode = E_UNEXPECTED;
-	else if (is_object()) {
-		value = self;
-		hrcode = S_OK;
-	}
 	else {
 		CComVariant val;
 		hrcode = disp->GetProperty(dispid, index, &val);
 		if SUCCEEDED(hrcode) value = Variant2Value(isolate, val);
+		else if (is_object()) {
+			value = self;
+			hrcode = S_OK;
+		}
 	}
 	return hrcode;
 }
@@ -296,11 +325,11 @@ void DispObject::NodeInit(const Local<Object> &target) {
 	NODE_DEBUG_MSG("DispObject initialized");
 }
 
-Local<Object> DispObject::NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, const std::wstring &name, DISPID id, LONG index) {
+Local<Object> DispObject::NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, const std::wstring &name, DISPID id, LONG index, int opt) {
     Local<Object> self;
     if (!inst_template.IsEmpty()) {
         self = inst_template.Get(isolate)->NewInstance();
-        (new DispObject(ptr, name, id, index))->Wrap(self);
+        (new DispObject(ptr, name, id, index, opt))->Wrap(self);
 		//Local<String> prop_id(String::NewFromUtf8(isolate, "_identity"));
 		//self->Set(prop_id, String::NewFromTwoByte(isolate, (uint16_t*)name));
 	}

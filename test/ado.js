@@ -63,9 +63,9 @@ describe("ADODB.Connection", function() {
             while (!rs.EOF) { 
                 cnt++;
                 var name = fields("Name").Value;
-                var town = fields("City").value;
-                var phone = fields("Phone").value;
-                var zip = fields("Zip").value;    
+                var town = fields["City"].value;
+                var phone = fields[2].value;
+                var zip = fields[3].value;    
                 rs.MoveNext();
             }           
             assert.equal(cnt, reccnt); 

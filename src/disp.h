@@ -15,8 +15,9 @@ enum options_t {
 	option_activate = 0x04,
 	option_prepared = 0x10,
     option_owned = 0x20,
-	option_auto = (option_async | option_type),
-	option_mask = 0x0F
+	option_property = 0x40,
+	option_mask = 0x0F,
+	option_auto = (option_async | option_type)
 };
 
 class DispInfo {
@@ -26,10 +27,17 @@ public:
     std::wstring name;
 	int options;
 
-	struct func_t { DISPID dispid; int kind; int argcnt; };
-	typedef std::shared_ptr<func_t> func_ptr;
-	typedef std::map<DISPID, func_ptr> func_by_dispid_t;
-	func_by_dispid_t funcs_by_dispid;
+	struct type_t { 
+		DISPID dispid; 
+		int kind; 
+		int argcnt_get; 
+		inline type_t(DISPID dispid_, int kind_) : dispid(dispid_), kind(kind_), argcnt_get(0) {}
+		inline bool is_property() const { return ((kind & INVOKE_FUNC) == 0); }
+		inline bool is_property_simple() const { return (((kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_PROPERTYGET) && (argcnt_get == 0); }
+	};
+	typedef std::shared_ptr<type_t> type_ptr;
+	typedef std::map<DISPID, type_ptr> types_by_dispid_t;
+	types_by_dispid_t types_by_dispid;
 
     inline DispInfo(IDispatch *disp, const std::wstring &nm, int opt, std::shared_ptr<DispInfo> *parnt = nullptr)
         : ptr(disp), options(opt), name(nm)
@@ -41,20 +49,15 @@ public:
 
     void Prepare(IDispatch *disp) {
         Enumerate([this](ITypeInfo *info, FUNCDESC *desc) {
-			func_ptr &ptr = this->funcs_by_dispid[desc->memid];
-			if (!ptr) {
-				ptr.reset(new func_t);
-				ptr->dispid = desc->memid;
-				ptr->kind = desc->invkind;
-				ptr->argcnt = desc->cParams;
-			}
-			else {
-				ptr->kind |= desc->invkind;
-				if (desc->cParams > ptr->argcnt) 
-					ptr->argcnt = desc->cParams;
+			type_ptr &ptr = this->types_by_dispid[desc->memid];
+			if (!ptr) ptr.reset(new type_t(desc->memid, desc->invkind));
+			else ptr->kind |= desc->invkind;
+			if ((desc->invkind & INVOKE_PROPERTYGET) != 0) {
+				if (desc->cParams > ptr->argcnt_get)
+					ptr->argcnt_get = desc->cParams;
 			}
         });
-        bool prepared = funcs_by_dispid.size() > 3; // QueryInterface, AddRef, Release
+        bool prepared = types_by_dispid.size() > 3; // QueryInterface, AddRef, Release
         if (prepared) options |= option_prepared;
 	}
 
@@ -96,27 +99,27 @@ public:
         return info->GetNames(dispid, name, 1, &cnt_ret) == S_OK && cnt_ret > 0;
     }
 
-	inline bool IsProperty(const DISPID dispid) {
+	inline bool GetTypeInfo(const DISPID dispid, type_ptr &info) {
 		if ((options & option_prepared) == 0) return false;
-		func_by_dispid_t::const_iterator it = funcs_by_dispid.find(dispid);
-		if (it == funcs_by_dispid.end()) return false;
-		func_ptr ptr = it->second;
-		return (((ptr->kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_PROPERTYGET) && (ptr->argcnt == 0);
+		types_by_dispid_t::const_iterator it = types_by_dispid.find(dispid);
+		if (it == types_by_dispid.end()) return false;
+		info = it->second;
+		return true;
 	}
 
 	HRESULT FindProperty(LPOLESTR name, DISPID *dispid) {
 		return DispFind(ptr, name, dispid);
 	}
 
+	HRESULT GetProperty(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value) {
+		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_PROPERTYGET);
+		return hrcode;
+	}
+
 	HRESULT GetProperty(DISPID dispid, LONG index, VARIANT *value) {
 		CComVariant arg(index);
 		LONG argcnt = (index >= 0) ? 1 : 0;
-		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, &arg, value, DISPATCH_PROPERTYGET);
-        if FAILED(hrcode) {
-            value->vt = VT_EMPTY;
-            if (dispid == DISPID_VALUE) hrcode = S_OK;
-        }
-		return hrcode;
+		return DispInvoke(ptr, dispid, argcnt, &arg, value, DISPATCH_PROPERTYGET);
 	}
 
 	HRESULT SetProperty(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value) {
@@ -137,7 +140,7 @@ typedef std::shared_ptr<DispInfo> DispInfoPtr;
 class DispObject: public ObjectWrap
 {
 public:
-	DispObject(const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
+	DispObject(const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1, int opt = 0);
 	~DispObject();
 
 	static Persistent<ObjectTemplate> inst_template;
@@ -160,7 +163,7 @@ public:
 	}
 
 private:
-	static Local<Object> NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1);
+	static Local<Object> NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1, int opt = 0);
 
 	static void NodeCreate(const FunctionCallbackInfo<Value> &args);
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
@@ -188,7 +191,7 @@ private:
 	int options;
 	inline bool is_null() { return !disp; }
 	inline bool is_prepared() { return (options & option_prepared) != 0; }
-	inline bool is_object() { return dispid == DISPID_VALUE && index < 0; }
+	inline bool is_object() { return dispid == DISPID_VALUE /*&& index < 0*/; }
 	inline bool is_owned() { return (options & option_owned) != 0; }
 
 	DispInfoPtr disp;

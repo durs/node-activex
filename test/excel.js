@@ -84,6 +84,20 @@ describe("Excel with JS object", function() {
         if (excel) wbk = excel.Workbooks.Add(template_filename);
     });
 
+    it("worksheet access", function() {
+        var wsh1 = wbk.Worksheets.Item(1);
+        var wsh2 = wbk.Worksheets.Item[1];
+        assert.equal(wsh1.Name, 'Sheet1');
+        assert.equal(wsh2.Name, 'Sheet1');
+    });
+    
+    it("cell access", function() {
+        var wsh = wbk.Worksheets.Item(1);
+        wsh.Cells(1,1).Value = 'test';
+        var val = wsh.Cells(1,1).Value;
+        assert.equal(val, 'test');
+    });
+    
     it("invoke test simple property", function() {
         if (wbk && com_obj) assert.equal(test_value3, wbk.Test(com_obj, 'text', 0, test_value3));
     });

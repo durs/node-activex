@@ -37,16 +37,16 @@ console.log("Result field count: " + fields.Count);
 console.log("Result record count: " + rs.RecordCount);
 
 rs.MoveFirst();
-while (!rs.EOF) { 
-    var name = fields("Name").Value;
-    var town = fields("City").value;
-    var phone = fields("Phone").value;
-    var zip = fields("Zip").value;    
+while (!rs.EOF) {
+    // Access as property by string key
+    var name = fields["Name"].Value;
 
-    //var name = fields[0].value;
-    //var town = fields[1].value;
-    //var phone = fields[2].value;
-    //var zip = fields[3].value;
+    // Access as method with string argument
+    var town = fields("City").value;
+
+    // Access as indexed array
+    var phone = fields[2].value;
+    var zip = fields[3].value;    
 
     console.log("> Person: "+name+" from " + town + " phone: " + phone + " zip: " + zip);
     rs.MoveNext();

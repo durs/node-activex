@@ -44,7 +44,12 @@ public:
 		vt = VT_I4;
 		lVal = v; 
 	}
-    inline ~CComVariant() { 
+	inline CComVariant(LPOLESTR v) {
+		memset((VARIANT*)this, 0, sizeof(VARIANT));
+		vt = VT_BSTR;
+		bstrVal = SysAllocString(v);
+	}
+	inline ~CComVariant() {
 		Clear(); 
 	}
     inline void Clear() {
@@ -259,6 +264,7 @@ inline bool v8val2bool(const Local<Value> &v, bool def) {
 class VarArguments {
 public:
 	std::vector<CComVariant> items;
+	VarArguments() {}
 	VarArguments(Isolate *isolate, Local<Value> value) {
 		items.resize(1);
 		Value2Variant(isolate, value, items[0]);
