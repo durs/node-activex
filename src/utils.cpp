@@ -119,8 +119,11 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 		}
 		return String::NewFromUtf8(isolate, "[Unknown]");
 	}
-	case VT_BSTR:
-		return String::NewFromTwoByte(isolate, (uint16_t*)(by_ref ? *v.pbstrVal : v.bstrVal));
+	case VT_BSTR: {
+        BSTR bstr = by_ref ? (v.pbstrVal ? *v.pbstrVal : nullptr) : v.bstrVal;
+        if (!bstr) return String::Empty(isolate);
+		return String::NewFromTwoByte(isolate, (uint16_t*)bstr);
+    }
 	case VT_VARIANT: 
 		if (v.pvarVal) return Variant2Value(isolate, *v.pvarVal, allow_disp);
 	}
