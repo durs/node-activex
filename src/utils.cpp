@@ -62,12 +62,14 @@ Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
 	if ((v.vt & VT_ARRAY) == 0) return Null(isolate);
 	SAFEARRAY *varr = (v.vt & VT_BYREF) != 0 ? *v.pparray : v.parray;
 	if (!varr || varr->cDims != 1) return Null(isolate);
+	VARTYPE vt = v.vt & VT_TYPEMASK;
 	LONG cnt = (LONG)varr->rgsabound[0].cElements;
 	Local<Array> arr = Array::New(isolate, cnt);
-	for (LONG i = 0; i < cnt; i++) {
-		CComVariant var;
-		if SUCCEEDED(SafeArrayGetElement(varr, &i, (VARIANT*)&var)) {
-			arr->Set((uint32_t)i, Variant2Value(isolate, v, true));
+	for (LONG i = varr->rgsabound[0].lLbound; i < cnt; i++) {
+		CComVariant vi;
+		if SUCCEEDED(SafeArrayGetElement(varr, &i, (vt == VT_VARIANT) ? (void*)&vi : (void*)&vi.byref)) {
+			if (vt != VT_VARIANT) vi.vt = vt;
+			arr->Set((uint32_t)i, Variant2Value(isolate, vi, true));
 		}
 	}
 	return arr;
@@ -176,20 +178,20 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 	return String::NewFromUtf8(isolate, buf, String::kNormalString);
 }
 
-void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var) {
+void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt) {
 	if (val.IsEmpty() || val->IsUndefined()) {
 		var.vt = VT_EMPTY;
 	}
 	else if (val->IsNull()) {
 		var.vt = VT_NULL;
 	}
-	else if (val->IsUint32()) {
-		var.vt = VT_UI4;
-		var.ulVal = val->Uint32Value();
-	}
 	else if (val->IsInt32()) {
 		var.vt = VT_I4;
 		var.lVal = val->Int32Value();
+	}
+	else if (val->IsUint32()) {
+		var.ulVal = val->Uint32Value();
+		var.vt = (var.ulVal <= 0x7FFFFFFF) ? VT_I4 : VT_UI4;
 	}
 	else if (val->IsNumber()) {
 		var.vt = VT_R8;
@@ -203,9 +205,26 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var) {
 		var.vt = VT_BOOL;
 		var.boolVal = val->BooleanValue() ? VARIANT_TRUE : VARIANT_FALSE;
 	}
+	else if (val->IsArray() && (vt != VT_NULL)) {
+		Local<Array> arr = v8::Local<Array>::Cast(val);
+		uint32_t len = arr->Length();
+		if (vt == VT_EMPTY) vt = VT_VARIANT;
+		var.vt = VT_ARRAY | vt;
+		var.parray = SafeArrayCreateVector(vt, 0, len);
+		for (uint32_t i = 0; i < len; i++) {
+			CComVariant v;
+			Value2Variant(isolate, arr->Get(i), v, vt);
+			void *pv;
+			if (vt == VT_VARIANT) pv = (void*)&v;
+			else if (vt == VT_DISPATCH || vt == VT_UNKNOWN || vt == VT_BSTR) pv = v.byref;
+			else pv = (void*)&v.byref;
+			SafeArrayPutElement(var.parray, (LONG*)&i, pv);
+		}
+		vt = VT_EMPTY;
+	}
 	else if (val->IsObject()) {
 		Local<Object> obj = val->ToObject();
-		if (!DispObject::GetValueOf(isolate, obj, var)) {
+		if (!DispObject::GetValueOf(isolate, obj, var) && !VariantObject::GetValueOf(isolate, obj, var)) {
 			var.vt = VT_DISPATCH;
 			var.pdispVal = new DispObjectImpl(obj);
 			var.pdispVal->AddRef();
@@ -215,6 +234,10 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var) {
 		String::Value str(val);
 		var.vt = VT_BSTR;
 		var.bstrVal = (str.length() > 0) ? SysAllocString((LPOLESTR)*str) : 0;
+	}
+	if (vt != VT_EMPTY && vt != VT_NULL && vt != VT_VARIANT) {
+		if FAILED(VariantChangeType(&var, &var, 0, vt))
+			VariantClear(&var);
 	}
 }
 
@@ -233,7 +256,14 @@ bool UnknownDispGet(IUnknown *unk, IDispatch **disp) {
 }
 
 bool VariantDispGet(VARIANT *v, IDispatch **disp) {
-    if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
+	/*
+	if ((v->vt & VT_ARRAY) != 0) {
+		*disp = new DispArrayImpl(*v);
+		(*disp)->AddRef();
+		return true;
+	}
+	*/
+	if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
         *disp = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
         if (*disp) (*disp)->AddRef();
         return true;
@@ -242,6 +272,36 @@ bool VariantDispGet(VARIANT *v, IDispatch **disp) {
 		return UnknownDispGet(((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal, disp);
     }
     return false;
+}
+
+//-------------------------------------------------------------------------------------------------------
+// DispArrayImpl implemetation
+
+HRESULT STDMETHODCALLTYPE DispArrayImpl::GetIDsOfNames(REFIID riid, LPOLESTR *rgszNames, UINT cNames, LCID lcid, DISPID *rgDispId) {
+	if (cNames != 1 || !rgszNames[0]) return DISP_E_UNKNOWNNAME;
+	LPOLESTR name = rgszNames[0];
+	if (wcscmp(name, L"length") == 0) *rgDispId = 1;
+	else return DISP_E_UNKNOWNNAME;
+	return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE DispArrayImpl::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr) {
+	HRESULT hrcode = S_OK;
+	UINT argcnt = pDispParams->cArgs;
+	VARIANT *args = pDispParams->rgvarg;
+
+	if ((var.vt & VT_ARRAY) == 0) return E_NOTIMPL;
+	SAFEARRAY *arr = ((var.vt & VT_BYREF) != 0) ? *var.pparray : var.parray;
+
+	switch (dispIdMember) {
+	case 1: {
+		if (pVarResult) {
+			pVarResult->vt = VT_INT;
+			pVarResult->intVal = (INT)(arr ? arr->rgsabound[0].cElements : 0);
+		}
+		return hrcode; }
+	}
+	return E_NOTIMPL;
 }
 
 //-------------------------------------------------------------------------------------------------------
@@ -264,20 +324,20 @@ HRESULT STDMETHODCALLTYPE DispEnumImpl::Invoke(DISPID dispIdMember, REFIID riid,
     VARIANT *args = pDispParams->rgvarg;
     switch (dispIdMember) {
     case 1: {
-        CComArray arr;
+        CComVariant arr;
         ULONG fetched, celt = (argcnt > 0) ? Variant2Int(args[argcnt - 1], (ULONG)1) : 1;
         if (!pVarResult || celt == 0) hrcode = E_INVALIDARG;
-        if SUCCEEDED(hrcode) hrcode = arr.Prepare(VT_VARIANT, celt);
-        if SUCCEEDED(hrcode) hrcode = ptr->Next(celt, arr.GetElement<VARIANT>(0), &fetched);
+        if SUCCEEDED(hrcode) hrcode = arr.ArrayCreate(VT_VARIANT, celt);
+        if SUCCEEDED(hrcode) hrcode = ptr->Next(celt, arr.ArrayGet<VARIANT>(0), &fetched);
         if SUCCEEDED(hrcode) {
             if (fetched == 0) pVarResult->vt = VT_EMPTY;
             else if (fetched == 1) {
-                VARIANT *v = arr.GetElement<VARIANT>(0);
+                VARIANT *v = arr.ArrayGet<VARIANT>(0);
                 *pVarResult = *v;
                 v->vt = VT_EMPTY;
             }
             else {
-                if (fetched < celt) hrcode = arr.Resize(fetched);
+                if (fetched < celt) hrcode = arr.ArrayResize(fetched);
                 if SUCCEEDED(hrcode) arr.Detach(pVarResult);
             }
         }
@@ -413,7 +473,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 
 	// Store result
 	if (pVarResult) {
-		Value2Variant(isolate, ret, *pVarResult);
+		Value2Variant(isolate, ret, *pVarResult, VT_NULL);
 	}
 	return S_OK;
 }

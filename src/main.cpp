@@ -13,7 +13,8 @@ namespace node_activex {
 
     void Init(Local<Object> exports) {
         DispObject::NodeInit(exports);
-    }
+		VariantObject::NodeInit(exports);
+	}
 
     NODE_MODULE(node_activex, Init)
 }

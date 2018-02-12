@@ -26,6 +26,40 @@ var com_obj = new ActiveXObject({
 });
 ```
 
+ * Additional COM variant types support:
+	- **int** - VT_INT
+	- **uint** - VT_UINT
+	- **int8**, **char** - VT_I1
+	- **uint8**, **uchar**, **byte** - VT_UI1
+	- **int16**, **short** - VT_I2
+	- **uint16**, **ushort** - VT_UI2
+	- **int32** - VT_I4
+	- **uint32** - VT_UI4
+	- **int64**, **long** - VT_I8
+	- **uint64**, **ulong** - VT_UI8
+	- **float** - VT_R4
+	- **double** - VT_R8
+	- **string** - VT_BSTR
+	- **date** - VT_DATE
+	- **variant** - VT_VARIANT
+	- **null** - VT_NULL
+	- **empty** - VT_EMPTY
+``` js 
+var winax = require('winax');
+var Variant = winax.Variant;
+
+// create variant instance 
+var v_short = new Variant(17, 'short');
+
+// create variant arrays
+var v_array_of_variant = new Variant([1,'2',3]);
+var v_array_of_short = new Variant([1,'2',3], 'short');
+var v_array_of_string = new Variant([1,'2',3], 'string');	
+
+// also may be used cast function
+var v_short_from_cast = winax.cast(17, 'short');
+```
+
  * Additional dignostic propeties:
 	- **__id** - dispatch identity, for exmplae: ADODB.Connection.@Execute.Fields
 	- **__value** - value of dispatch object, equiles valueOf()

@@ -10,13 +10,14 @@
 
 enum options_t { 
     option_none = 0, 
-    option_async = 0x01, 
-    option_type = 0x02,
-	option_activate = 0x04,
-	option_prepared = 0x10,
-    option_owned = 0x20,
-	option_property = 0x40,
-	option_mask = 0x0F,
+    option_async = 0x0001, 
+    option_type = 0x0002,
+	option_activate = 0x0004,
+	option_prepared = 0x0100,
+    option_owned = 0x0200,
+	option_property = 0x0400,
+	option_function_simple = 0x0800,
+	option_mask = 0x00FF,
 	option_auto = (option_async | option_type)
 };
 
@@ -34,6 +35,7 @@ public:
 		inline type_t(DISPID dispid_, int kind_) : dispid(dispid_), kind(kind_), argcnt_get(0) {}
 		inline bool is_property() const { return ((kind & INVOKE_FUNC) == 0); }
 		inline bool is_property_simple() const { return (((kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_PROPERTYGET) && (argcnt_get == 0); }
+		inline bool is_function_simple() const { return (((kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_FUNC) && (argcnt_get == 0); }
 	};
 	typedef std::shared_ptr<type_t> type_ptr;
 	typedef std::map<DISPID, type_ptr> types_by_dispid_t;
@@ -136,7 +138,6 @@ public:
 
 typedef std::shared_ptr<DispInfo> DispInfoPtr;
 
-
 class DispObject: public ObjectWrap
 {
 public:
@@ -169,6 +170,7 @@ private:
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
 	static void NodeRelease(const FunctionCallbackInfo<Value> &args);
+	static void NodeCast(const FunctionCallbackInfo<Value> &args);
 	static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
 	static void NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
@@ -201,3 +203,40 @@ private:
 
 	HRESULT prepare();
 };
+
+
+class VariantObject : public ObjectWrap
+{
+public:
+	VariantObject() {};
+	VariantObject(const VARIANT &v) : value(v) {};
+	VariantObject(const FunctionCallbackInfo<Value> &args);
+
+	static Persistent<ObjectTemplate> inst_template;
+	static Persistent<FunctionTemplate> clazz_template;
+	static void NodeInit(const Local<Object> &target);
+	static bool HasInstance(Isolate *isolate, const Local<Value> &obj) {
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		return !clazz.IsEmpty() && clazz->HasInstance(obj);
+	}
+	static bool GetValueOf(Isolate *isolate, const Local<Object> &obj, VARIANT &value) {
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
+		VariantObject *self = Unwrap<VariantObject>(obj);
+		return self && SUCCEEDED(self->value.CopyTo(&value));
+	}
+
+	static Local<Object> NodeCreateInstance(const FunctionCallbackInfo<Value> &args);
+	static void NodeCreate(const FunctionCallbackInfo<Value> &args);
+	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
+	static void NodeToString(const FunctionCallbackInfo<Value> &args);
+	static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
+	static void NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
+	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+
+private:
+	std::wstring type;
+	CComVariant value;
+};
+

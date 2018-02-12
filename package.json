@@ -1,11 +1,22 @@
 {
   "name": "winax",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
-    "OLE", "COM", "ActiveX", "ActiveXObject", "CreateObject", "WSH", "WMI",
-    "Outlook", "Access", "Word", "Excel", "IE", "InternetExplorer"
+    "OLE",
+    "COM",
+    "ActiveX",
+    "ActiveXObject",
+    "CreateObject",
+    "WSH",
+    "WMI",
+    "Outlook",
+    "Access",
+    "Word",
+    "Excel",
+    "IE",
+    "InternetExplorer"
   ],
   "author": {
     "name": "durs",
@@ -19,10 +30,8 @@
     "type": "git",
     "url": "git://github.com/durs/node-activex.git"
   },
-  "dependencies": {
-  },
-  "devDependencies": {
-  },
+  "dependencies": {},
+  "devDependencies": {},
   "engines": {
     "node": ">= 4.0.0"
   },
@@ -31,7 +40,7 @@
   },
   "license": "BSD",
   "main": "./lib/activex",
-  "os": [ 
+  "os": [
     "win32"
   ]
 }

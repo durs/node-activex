@@ -63,26 +63,40 @@ public:
 	inline HRESULT CopyTo(VARIANT *dst) {
 		return VariantCopy(dst, this);
 	}
+
+	inline ULONG ArrayLength() {
+		if ((vt & VT_ARRAY) == 0) return 0;
+		SAFEARRAY *varr = (vt & VT_BYREF) != 0 ? *pparray : parray;
+		return varr ? varr->rgsabound[0].cElements : 0;
+	}
+
+	inline HRESULT ArrayGet(LONG index, CComVariant &var) {
+		if ((vt & VT_ARRAY) == 0) return E_NOTIMPL;
+		SAFEARRAY *varr = (vt & VT_BYREF) != 0 ? *pparray : parray;
+		if (!varr) return E_FAIL;
+		index += varr->rgsabound[0].lLbound;
+		VARTYPE vart = vt & VT_TYPEMASK;
+		HRESULT hr = SafeArrayGetElement(varr, &index, (vart == VT_VARIANT) ? (void*)&var : (void*)&var.byref);
+		if (SUCCEEDED(hr) && vart != VT_VARIANT) var.vt = vart;
+		return hr;
+	}
+	template<typename T>
+	inline T* ArrayGet(ULONG index = 0) {
+		return ((T*)parray->pvData) + index;
+	}
+	inline HRESULT ArrayCreate(VARTYPE avt, ULONG cnt) {
+		Clear();
+		parray = SafeArrayCreateVector(avt, 0, cnt);
+		if (!parray) return E_UNEXPECTED;
+		vt = VT_ARRAY | avt;
+		return S_OK;
+	}
+	inline HRESULT ArrayResize(ULONG cnt) {
+		SAFEARRAYBOUND bnds = { cnt, 0 };
+		return SafeArrayRedim(parray, &bnds);
+	}
 };
 
-class CComArray : public CComVariant {
-public:
-    inline HRESULT Prepare(VARTYPE avt, ULONG cnt) {
-        Clear();
-        parray = SafeArrayCreateVector(avt, 0, cnt);
-        if (!parray) return E_UNEXPECTED;
-        vt = VT_ARRAY | avt;
-        return S_OK;
-    }
-    inline HRESULT Resize(ULONG cnt) {
-        SAFEARRAYBOUND bnds = { cnt, 0 };
-        return SafeArrayRedim(parray, &bnds);
-    }
-    template<typename T>
-    inline T* GetElement(ULONG index = 0) {
-        return ((T*)parray->pvData) + index;
-    }
-};
 
 class CComBSTR {
 public:
@@ -245,7 +259,7 @@ inline INTTYPE Variant2Int(const VARIANT &v, const INTTYPE def) {
 Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v);
 Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp = false);
 Local<Value> Variant2String(Isolate *isolate, const VARIANT &v);
-void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var);
+void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt = VT_EMPTY);
 bool VariantDispGet(VARIANT *v, IDispatch **disp);
 bool UnknownDispGet(IUnknown *unk, IDispatch **disp);
 
@@ -320,6 +334,18 @@ public:
 protected:
 	LONG refcnt;
 
+};
+
+class DispArrayImpl : public UnknownImpl<IDispatch> {
+public:
+	CComVariant var;
+	DispArrayImpl(const VARIANT &v): var(v) {}
+
+	// IDispatch interface
+	virtual HRESULT STDMETHODCALLTYPE GetTypeInfoCount(UINT *pctinfo) { *pctinfo = 0; return S_OK; }
+	virtual HRESULT STDMETHODCALLTYPE GetTypeInfo(UINT iTInfo, LCID lcid, ITypeInfo **ppTInfo) { return E_NOTIMPL; }
+	virtual HRESULT STDMETHODCALLTYPE GetIDsOfNames(REFIID riid, LPOLESTR *rgszNames, UINT cNames, LCID lcid, DISPID *rgDispId);
+	virtual HRESULT STDMETHODCALLTYPE Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr);
 };
 
 class DispEnumImpl : public UnknownImpl<IDispatch> {
