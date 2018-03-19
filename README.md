@@ -44,8 +44,7 @@ var com_obj = new ActiveXObject({
 	- **variant** - VT_VARIANT
 	- **null** - VT_NULL
 	- **empty** - VT_EMPTY
-	- **byref** - VT_BYREF
-prefix **'p'** allows to use references(VT_BYREF) to the current type
+	- **byref** - VT_BYREF or use prefix **'p'** to indicate reference to the current type
 
 ``` js 
 var winax = require('winax');
