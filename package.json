@@ -1,6 +1,6 @@
 {
   "name": "winax",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
@@ -9,14 +9,12 @@
     "ActiveX",
     "ActiveXObject",
     "CreateObject",
+    "Variant",
+    "Dispatch",
     "WSH",
     "WMI",
-    "Outlook",
-    "Access",
-    "Word",
     "Excel",
-    "IE",
-    "InternetExplorer"
+    "Word"
   ],
   "author": {
     "name": "durs",

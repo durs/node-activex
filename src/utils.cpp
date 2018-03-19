@@ -114,7 +114,7 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 	}
 	case VT_UNKNOWN: {
 		CComPtr<IDispatch> disp;
-		if (allow_disp && UnknownDispGet(((v.vt & VT_BYREF) != 0) ? *v.ppunkVal : v.punkVal, &disp)) {
+		if (allow_disp && UnknownDispGet(by_ref ? *v.ppunkVal : v.punkVal, &disp)) {
 			return DispObject::NodeCreate(isolate, disp, L"Unknown", option_auto);
 		}
 		return String::NewFromUtf8(isolate, "[Unknown]");

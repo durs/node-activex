@@ -205,7 +205,7 @@ inline HRESULT DispFind(IDispatch *disp, LPOLESTR name, DISPID *dispid) {
 inline HRESULT DispInvoke(IDispatch *disp, DISPID dispid, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD) {
 	DISPPARAMS params = { args, 0, argcnt, 0 };
 	DISPID dispidNamed = DISPID_PROPERTYPUT;
-	if (flags == DISPATCH_PROPERTYPUT) { // It`s is a magic
+	if (flags == DISPATCH_PROPERTYPUT) { // It`s a magic
 		params.cNamedArgs = 1;
 		params.rgdispidNamedArgs = &dispidNamed;
 	}
