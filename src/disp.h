@@ -219,6 +219,11 @@ public:
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		return !clazz.IsEmpty() && clazz->HasInstance(obj);
 	}
+	static VariantObject *GetInstanceOf(Isolate *isolate, const Local<Object> &obj) {
+		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
+		return Unwrap<VariantObject>(obj);
+	}
 	static bool GetValueOf(Isolate *isolate, const Local<Object> &obj, VARIANT &value) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
@@ -236,7 +241,6 @@ public:
 	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 
 private:
-	std::wstring type;
-	CComVariant value;
+	CComVariant value, pvalue;
 };
 

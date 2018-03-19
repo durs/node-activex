@@ -606,8 +606,17 @@ const static std::map<std::wstring, VARTYPE> str2vt = {
 	{ L"string", VT_BSTR },
 	{ L"date", VT_DATE },
 	{ L"variant", VT_VARIANT },
-	{ L"null", VT_NULL }
+	{ L"null", VT_NULL },
+	{ L"byref", VT_BYREF }
 };
+
+static std::map<VARTYPE, std::wstring> vt2str_prepare() {
+	std::map<VARTYPE, std::wstring> map;
+	for (auto &p : str2vt) map.emplace(p.second, p.first);
+	return std::move(map);
+}
+
+const static std::map<VARTYPE, std::wstring> vt2str = vt2str_prepare();
 
 VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
@@ -619,16 +628,41 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 		if (args[1]->IsString()) {
 			Local<String> vtval = args[1]->ToString();
 			String::Value vtstr(vtval);
+			const wchar_t *pvtstr = (const wchar_t *)*vtstr;
 			int vtstr_len = vtstr.length();
+			if (vtstr_len > 0  && *pvtstr == 'p') {
+				vt |= VT_BYREF;
+				vtstr_len--;
+				pvtstr++;
+			}
 			if (vtstr_len > 0) {
-				type.assign((const wchar_t*)*vtstr, vtstr_len);
+				std::wstring type((const wchar_t*)*vtstr, vtstr_len);
 				auto it = str2vt.find(type);
-				if (it != str2vt.end()) vt = it->second;
+				if (it != str2vt.end()) vt |= it->second;
 				else type.clear();
 			}
 		}
 	}
-	Value2Variant(isolate, val, value, vt);
+	if ((vt & VT_BYREF) == 0) {
+		Value2Variant(isolate, val, value, vt);
+	}
+	else {
+		VARIANT *refvalue = nullptr;
+		VARTYPE vt_noref = vt & ~VT_BYREF;
+		VariantObject *ref = (!val.IsEmpty() && val->IsObject()) ? GetInstanceOf(isolate, val->ToObject()) : nullptr;
+		if (ref) {
+			if ((ref->value.vt & VT_BYREF) != 0) value = ref->value;
+			else refvalue = &ref->value;
+		}
+		else {
+			Value2Variant(isolate, val, pvalue, vt_noref);
+			refvalue = &pvalue;
+		}
+		if (refvalue) {
+			value.byref = (vt_noref == VT_VARIANT) ? (PVOID)refvalue : (PVOID)&refvalue->intVal;
+			value.vt = refvalue->vt | VT_BYREF;
+		}
+	}
 }
 
 void VariantObject::NodeInit(const Local<Object> &target) {
@@ -710,8 +744,10 @@ void VariantObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value
 	}
 	else if (_wcsicmp(id, L"__type") == 0) {
 		std::wstring type;
+		if (self->value.vt & VT_BYREF) type += L"byref:";
 		if (self->value.vt & VT_ARRAY) type = L"array:";
-		if (!self->type.empty()) type += self->type;
+		auto it = vt2str.find(self->value.vt & VT_TYPEMASK);
+		if (it != vt2str.end()) type += it->second;
 		args.GetReturnValue().Set(String::NewFromTwoByte(isolate, (uint16_t*)type.c_str()));
 	}
 	else if (_wcsicmp(id, L"__proto__") == 0) {
@@ -752,7 +788,7 @@ void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Va
 	args.GetReturnValue().Set(result);
 }
 
-void VariantObject::NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeSet(Local<String> name, Local<Value> val, const PropertyCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {

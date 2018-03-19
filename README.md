@@ -44,12 +44,16 @@ var com_obj = new ActiveXObject({
 	- **variant** - VT_VARIANT
 	- **null** - VT_NULL
 	- **empty** - VT_EMPTY
+	- **byref** - VT_BYREF
+    prefix **'p'** allows to use references(VT_BYREF) to the current type
 ``` js 
 var winax = require('winax');
 var Variant = winax.Variant;
 
 // create variant instance 
 var v_short = new Variant(17, 'short');
+var v_short_byref = new Variant(17, 'pshort');
+var v_int_byref = new Variant(17, 'byref');
 
 // create variant arrays
 var v_array_of_variant = new Variant([1,'2',3]);
