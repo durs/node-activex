@@ -618,19 +618,15 @@ static std::map<VARTYPE, std::wstring> vt2str_prepare() {
 
 const static std::map<VARTYPE, std::wstring> vt2str = vt2str_prepare();
 
-VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
-	Isolate *isolate = args.GetIsolate();
-	Local<Value> val;
+bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &type) {
 	VARTYPE vt = VT_EMPTY;
-	int argcnt = args.Length();
-	if (argcnt > 0) val = args[0];
-	if (argcnt > 0) {
-		if (args[1]->IsString()) {
-			Local<String> vtval = args[1]->ToString();
+	if (!type.IsEmpty()) {
+		if (type->IsString()) {
+			Local<String> vtval = type->ToString();
 			String::Value vtstr(vtval);
 			const wchar_t *pvtstr = (const wchar_t *)*vtstr;
 			int vtstr_len = vtstr.length();
-			if (vtstr_len > 0  && *pvtstr == 'p') {
+			if (vtstr_len > 0 && *pvtstr == 'p') {
 				vt |= VT_BYREF;
 				vtstr_len--;
 				pvtstr++;
@@ -641,10 +637,19 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 				if (it != str2vt.end()) vt |= it->second;
 			}
 		}
-		else if (args[1]->IsInt32()) {
-			vt |= args[1]->Int32Value();
+		else if (type->IsInt32()) {
+			vt |= type->Int32Value();
 		}
 	}
+
+	if (val.IsEmpty()) {
+		if FAILED(value.ChangeType(vt)) return false;
+		if ((value.vt & VT_BYREF) == 0) pvalue.Clear();
+		return true;
+	}
+
+	value.Clear();
+	pvalue.Clear();
 	if ((vt & VT_BYREF) == 0) {
 		Value2Variant(isolate, val, value, vt);
 	}
@@ -671,6 +676,15 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 			}
 		}
 	}
+	return true;
+}
+
+VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
+	Local<Value> val, type;
+	int argcnt = args.Length();
+	if (argcnt > 0) val = args[0];
+	if (argcnt > 1) type = args[1];
+	assign(args.GetIsolate(), val, type);
 }
 
 void VariantObject::NodeInit(const Local<Object> &target) {
@@ -680,6 +694,9 @@ void VariantObject::NodeInit(const Local<Object> &target) {
 	Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
 	clazz->SetClassName(String::NewFromUtf8(isolate, "Variant"));
 
+	NODE_SET_PROTOTYPE_METHOD(clazz, "clear", NodeClear);
+	NODE_SET_PROTOTYPE_METHOD(clazz, "assign", NodeAssign);
+	NODE_SET_PROTOTYPE_METHOD(clazz, "cast", NodeCast);
 	NODE_SET_PROTOTYPE_METHOD(clazz, "toString", NodeToString);
 	NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", NodeValueOf);
 
@@ -715,6 +732,44 @@ void VariantObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	args.GetReturnValue().Set(self);
 }
 
+void VariantObject::NodeClear(const FunctionCallbackInfo<Value>& args) {
+	Isolate *isolate = args.GetIsolate();
+	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+	if (!self) {
+		isolate->ThrowException(DispErrorInvalid(isolate));
+		return;
+	}
+	self->value.Clear();
+	self->pvalue.Clear();
+}
+
+void VariantObject::NodeAssign(const FunctionCallbackInfo<Value>& args) {
+	Isolate *isolate = args.GetIsolate();
+	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+	if (!self) {
+		isolate->ThrowException(DispErrorInvalid(isolate));
+		return;
+	}
+	Local<Value> val, type;
+	int argcnt = args.Length();
+	if (argcnt > 0) val = args[0];
+	if (argcnt > 1) type = args[1];
+	self->assign(isolate, val, type);
+}
+
+void VariantObject::NodeCast(const FunctionCallbackInfo<Value>& args) {
+	Isolate *isolate = args.GetIsolate();
+	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+	if (!self) {
+		isolate->ThrowException(DispErrorInvalid(isolate));
+		return;
+	}
+	Local<Value> val, type;
+	int argcnt = args.Length();
+	if (argcnt > 0) type = args[0];
+	self->assign(isolate, val, type);
+}
+
 void VariantObject::NodeValueOf(const FunctionCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
@@ -722,7 +777,7 @@ void VariantObject::NodeValueOf(const FunctionCallbackInfo<Value>& args) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
-	Local<Value> result = Variant2Value(isolate, self->value);
+	Local<Value> result = Variant2Value(isolate, self->value, true);
 	args.GetReturnValue().Set(result);
 }
 
@@ -756,12 +811,22 @@ void VariantObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value
 		if (self->value.vt & VT_ARRAY) type = L"array:";
 		auto it = vt2str.find(self->value.vt & VT_TYPEMASK);
 		if (it != vt2str.end()) type += it->second;
+		else type += std::to_wstring(self->value.vt & VT_TYPEMASK);
 		args.GetReturnValue().Set(String::NewFromTwoByte(isolate, (uint16_t*)type.c_str()));
 	}
 	else if (_wcsicmp(id, L"__proto__") == 0) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		if (clazz.IsEmpty()) args.GetReturnValue().SetNull();
 		else args.GetReturnValue().Set(clazz_template.Get(isolate)->GetFunction());
+	}
+	else if (_wcsicmp(id, L"clear") == 0) {
+		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeClear, args.This())->GetFunction());
+	}
+	else if (_wcsicmp(id, L"assign") == 0) {
+		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeAssign, args.This())->GetFunction());
+	}
+	else if (_wcsicmp(id, L"cast") == 0) {
+		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeCast, args.This())->GetFunction());
 	}
 	else if (_wcsicmp(id, L"valueOf") == 0) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());

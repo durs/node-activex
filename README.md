@@ -54,11 +54,18 @@ var Variant = winax.Variant;
 var v_short = new Variant(17, 'short');
 var v_short_byref = new Variant(17, 'pshort');
 var v_int_byref = new Variant(17, 'byref');
+var v_byref = new Variant(v_short, 'byref');
 
 // create variant arrays
 var v_array_of_variant = new Variant([1,'2',3]);
 var v_array_of_short = new Variant([1,'2',3], 'short');
 var v_array_of_string = new Variant([1,'2',3], 'string');	
+
+// change variant content
+var v_test = new Variant();
+v_test.assign(17);
+v_test.cast('string');
+v_test.clear();
 
 // also may be used cast function
 var v_short_from_cast = winax.cast(17, 'short');

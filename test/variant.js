@@ -26,5 +26,22 @@ describe("Variants", function() {
         assert.strictEqual(arr[1], js_arr[1]);
     });
 
+    it("References", function() {
+        var v = new winax.Variant();
+        var ref = new winax.Variant(v, 'byref');
+
+        v.assign(1, 'string');
+        assert.strictEqual(v.valueOf(), '1');
+        assert.strictEqual(ref.valueOf(), '1');
+
+        v.cast('int');
+        assert.strictEqual(v.valueOf(), 1);
+        assert.strictEqual(ref.valueOf(), 1);
+
+        v.clear();
+        assert.strictEqual(v.valueOf(), undefined);
+        assert.strictEqual(ref.valueOf(), undefined);
+    });
+
 });
 

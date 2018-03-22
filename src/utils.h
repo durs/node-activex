@@ -64,6 +64,10 @@ public:
 		return VariantCopy(dst, this);
 	}
 
+	inline HRESULT ChangeType(VARTYPE vtNew, const VARIANT* pSrc = NULL) {
+		return VariantChangeType(this, pSrc ? pSrc : this, 0, vtNew);
+	}
+
 	inline ULONG ArrayLength() {
 		if ((vt & VT_ARRAY) == 0) return 0;
 		SAFEARRAY *varr = (vt & VT_BYREF) != 0 ? *pparray : parray;
@@ -96,7 +100,6 @@ public:
 		return SafeArrayRedim(parray, &bnds);
 	}
 };
-
 
 class CComBSTR {
 public:

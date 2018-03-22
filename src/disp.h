@@ -233,6 +233,9 @@ public:
 
 	static Local<Object> NodeCreateInstance(const FunctionCallbackInfo<Value> &args);
 	static void NodeCreate(const FunctionCallbackInfo<Value> &args);
+	static void NodeClear(const FunctionCallbackInfo<Value> &args);
+	static void NodeAssign(const FunctionCallbackInfo<Value> &args);
+	static void NodeCast(const FunctionCallbackInfo<Value> &args);
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
 	static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
@@ -242,5 +245,6 @@ public:
 
 private:
 	CComVariant value, pvalue;
+	bool assign(Isolate *isolate, Local<Value> &val, Local<Value> &type);
 };
 
