@@ -636,11 +636,13 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 				pvtstr++;
 			}
 			if (vtstr_len > 0) {
-				std::wstring type((const wchar_t*)*vtstr, vtstr_len);
+				std::wstring type(pvtstr, vtstr_len);
 				auto it = str2vt.find(type);
 				if (it != str2vt.end()) vt |= it->second;
-				else type.clear();
 			}
+		}
+		else if (args[1]->IsInt32()) {
+			vt |= args[1]->Int32Value();
 		}
 	}
 	if ((vt & VT_BYREF) == 0) {
@@ -659,8 +661,14 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 			refvalue = &pvalue;
 		}
 		if (refvalue) {
-			value.byref = (vt_noref == VT_VARIANT) ? (PVOID)refvalue : (PVOID)&refvalue->intVal;
-			value.vt = refvalue->vt | VT_BYREF;
+			if (vt_noref == 0 || vt_noref == VT_VARIANT || refvalue->vt == VT_EMPTY) {
+				value.vt = VT_VARIANT | VT_BYREF;
+				value.pvarVal = refvalue;
+			}
+			else {
+				value.vt = refvalue->vt | VT_BYREF;
+				value.byref = &refvalue->intVal;
+			}
 		}
 	}
 }
