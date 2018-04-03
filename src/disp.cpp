@@ -111,7 +111,6 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 		if (index >= 0) vargs.items.push_back(CComVariant(index));
 		LONG argcnt = (LONG)vargs.items.size();
 		VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
-		//hrcode = disp->GetProperty(propid, index, &value);
 		hrcode = disp->GetProperty(propid, argcnt, pargs, &value);
 		if (FAILED(hrcode) && dispid != DISPID_VALUE){
 			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyGet", tag));
@@ -229,19 +228,23 @@ HRESULT DispObject::valueOf(Isolate *isolate, VARIANT &value) {
 	if (!is_prepared()) prepare();
 	HRESULT hrcode;
 	if (!disp) hrcode = E_UNEXPECTED;
-	else {
-		if ((options & option_function_simple) != 0) {
-			hrcode = disp->ExecuteMethod(dispid, 0, 0, &value);
-		}
-		else {
-			hrcode = disp->GetProperty(dispid, index, &value);
-		}
-		if (FAILED(hrcode) && is_object()) {
-			value.vt = VT_DISPATCH;
-			value.pdispVal = disp ? (IDispatch*)disp->ptr : NULL;
-			if (value.pdispVal) value.pdispVal->AddRef();
-			hrcode = S_OK;
-		}
+
+	// simple function without arguments
+	else if ((options & option_function_simple) != 0) {
+		hrcode = disp->ExecuteMethod(dispid, 0, 0, &value);
+	}
+
+	// property or array element
+	else if (dispid != DISPID_VALUE || index >= 0) {
+		hrcode = disp->GetProperty(dispid, index, &value);
+	}
+
+	// self dispatch object
+	else /*if (is_object())*/ {
+		value.vt = VT_DISPATCH;
+		value.pdispVal = (IDispatch*)disp->ptr;
+		if (value.pdispVal) value.pdispVal->AddRef();
+		hrcode = S_OK;
 	}
 	return hrcode;
 }
@@ -252,14 +255,24 @@ HRESULT DispObject::valueOf(Isolate *isolate, const Local<Object> &self, Local<V
 	if (!disp) hrcode = E_UNEXPECTED;
 	else {
 		CComVariant val;
+
+		// simple function without arguments
 		if ((options & option_function_simple) != 0) {
 			hrcode = disp->ExecuteMethod(dispid, 0, 0, &val);
 		}
+
+		// self value, property or array element
 		else {
 			hrcode = disp->GetProperty(dispid, index, &val);
 		}
-		if SUCCEEDED(hrcode) value = Variant2Value(isolate, val);
-		else if (is_object()) {
+
+		// convert result to v8 value
+		if SUCCEEDED(hrcode) {
+			value = Variant2Value(isolate, val);
+		}
+
+		// or return self as object
+		else  {
 			value = self;
 			hrcode = S_OK;
 		}

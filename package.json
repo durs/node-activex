@@ -1,6 +1,6 @@
 {
   "name": "winax",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
@@ -28,7 +28,9 @@
     "type": "git",
     "url": "git://github.com/durs/node-activex.git"
   },
-  "dependencies": {},
+  "dependencies": {
+    "webworker-threads": "^0.7.13"
+  },
   "devDependencies": {},
   "engines": {
     "node": ">= 4.0.0"
