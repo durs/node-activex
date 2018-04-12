@@ -37,10 +37,12 @@ var com_obj = new ActiveXObject({
 	- **uint32** - VT_UI4
 	- **int64**, **long** - VT_I8
 	- **uint64**, **ulong** - VT_UI8
+	- **currency** - VT_CY
 	- **float** - VT_R4
 	- **double** - VT_R8
 	- **string** - VT_BSTR
 	- **date** - VT_DATE
+	- **decimal** - VT_DECIMAL
 	- **variant** - VT_VARIANT
 	- **null** - VT_NULL
 	- **empty** - VT_EMPTY

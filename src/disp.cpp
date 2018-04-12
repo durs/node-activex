@@ -612,12 +612,15 @@ const static std::map<std::wstring, VARTYPE> str2vt = {
 	{ L"uint32", VT_UI4 },
 	{ L"int64", VT_I8 },
 	{ L"uint64", VT_UI8 },
+	{ L"currency", VT_CY },
 
 	{ L"float", VT_R4 },
 	{ L"double", VT_R8 },
-	{ L"empty", VT_EMPTY },
-	{ L"string", VT_BSTR },
 	{ L"date", VT_DATE },
+	{ L"decimal", VT_DECIMAL },
+
+	{ L"string", VT_BSTR },
+	{ L"empty", VT_EMPTY },
 	{ L"variant", VT_VARIANT },
 	{ L"null", VT_NULL },
 	{ L"byref", VT_BYREF }
