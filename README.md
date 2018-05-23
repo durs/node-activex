@@ -164,9 +164,10 @@ node-gyp build
 
 For Electron users, need rebuild with a different V8 version:
 ```
-npm rebuild winax --runtime=electron --target=1.4.3 --disturl=https://atom.io/download/atom-shell --build-from-source
+npm rebuild winax --runtime=electron --target=2.0.2 --disturl=https://atom.io/download/atom-shell --build-from-source
 ```
-See also Electron Documentation: [Using Native Node Modules](https://electron.atom.io/docs/tutorial/using-native-node-modules/)
+Change --target value to your electron version.
+See also Electron Documentation: [Using Native Node Modules](https://electron.atom.io/docs/tutorial/using-native-node-modules/).
 
 # Tests
 
