@@ -29,7 +29,6 @@
     "url": "git://github.com/durs/node-activex.git"
   },
   "dependencies": {
-    "webworker-threads": "^0.7.13"
   },
   "devDependencies": {},
   "engines": {
