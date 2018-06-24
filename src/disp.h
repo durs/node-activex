@@ -171,11 +171,15 @@ private:
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
 	static void NodeRelease(const FunctionCallbackInfo<Value> &args);
 	static void NodeCast(const FunctionCallbackInfo<Value> &args);
-	static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
+    static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
 	static void NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
 	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
+
+#ifdef TEST_ADVISE 
+    static void NodeConnectionPoints(const FunctionCallbackInfo<Value> &args);
+#endif
 
 protected:
 	bool release();
@@ -248,3 +252,21 @@ private:
 	bool assign(Isolate *isolate, Local<Value> &val, Local<Value> &type);
 };
 
+#ifdef TEST_ADVISE 
+
+class ConnectionPointObject : public ObjectWrap
+{
+public:
+    ConnectionPointObject(IConnectionPoint *p): ptr(p) {}
+    ConnectionPointObject(const FunctionCallbackInfo<Value> &args) {}
+    static Persistent<ObjectTemplate> inst_template;
+    static Persistent<FunctionTemplate> clazz_template;
+    static Local<Object> NodeCreateInstance(Isolate *isolate, IConnectionPoint *p);
+    static void NodeInit(const Local<Object> &target);
+    static void NodeCreate(const FunctionCallbackInfo<Value> &args);
+    static void NodeAdvise(const FunctionCallbackInfo<Value> &args);
+private:
+    CComPtr<IConnectionPoint> ptr;
+};
+
+#endif

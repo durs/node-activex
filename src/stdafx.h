@@ -14,6 +14,7 @@
 #include <atlstr.h>
 #else
 #include <ole2.h>
+#include <ocidl.h>
 #endif
 
 // STD headers
@@ -23,6 +24,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <initializer_list>
 
 // Node JS headers
 #include <v8.h>
@@ -32,3 +34,6 @@
 #include <node_buffer.h>
 using namespace v8;
 using namespace node;
+
+// Application defines
+//#define TEST_ADVISE

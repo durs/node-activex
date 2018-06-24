@@ -14,7 +14,11 @@ namespace node_activex {
     void Init(Local<Object> exports) {
         DispObject::NodeInit(exports);
 		VariantObject::NodeInit(exports);
-	}
+
+#ifdef TEST_ADVISE 
+        ConnectionPointObject::NodeInit(exports);
+#endif
+    }
 
     NODE_MODULE(node_activex, Init)
 }

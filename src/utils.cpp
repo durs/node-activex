@@ -260,6 +260,14 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 	}
 }
 
+bool Value2Unknown(Isolate *isolate, Local<Value> &val, IUnknown **unk) {
+    if (val.IsEmpty() || !val->IsObject()) return false;
+    Local<Object> obj = val->ToObject();
+    CComVariant var;
+    if (!DispObject::GetValueOf(isolate, obj, var) && !VariantObject::GetValueOf(isolate, obj, var)) return false;
+    return VariantUnkGet(&var, unk);
+}
+
 bool UnknownDispGet(IUnknown *unk, IDispatch **disp) {
 	if (!unk) return false;
 	if SUCCEEDED(unk->QueryInterface(__uuidof(IDispatch), (void**)disp)) {
@@ -272,6 +280,20 @@ bool UnknownDispGet(IUnknown *unk, IDispatch **disp) {
 		return true;
 	}
 	return false;
+}
+
+bool VariantUnkGet(VARIANT *v, IUnknown **unk) {
+    if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
+        *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
+        if (*unk) (*unk)->AddRef();
+        return true;
+    }
+    if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
+        *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
+        if (*unk) (*unk)->AddRef();
+        return true;
+    }
+    return false;
 }
 
 bool VariantDispGet(VARIANT *v, IDispatch **disp) {

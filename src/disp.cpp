@@ -13,6 +13,11 @@ Persistent<FunctionTemplate> DispObject::clazz_template;
 Persistent<ObjectTemplate> VariantObject::inst_template;
 Persistent<FunctionTemplate> VariantObject::clazz_template;
 
+#ifdef TEST_ADVISE 
+Persistent<ObjectTemplate> ConnectionPointObject::inst_template;
+Persistent<FunctionTemplate> ConnectionPointObject::clazz_template;
+#endif
+
 //-------------------------------------------------------------------------------------------------------
 // DispObject implemetation
 
@@ -353,6 +358,10 @@ void DispObject::NodeInit(const Local<Object> &target) {
 	target->Set(String::NewFromUtf8(isolate, "cast"), FunctionTemplate::New(isolate, NodeCast, target)->GetFunction());
 	target->Set(String::NewFromUtf8(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease, target)->GetFunction());
 
+#ifdef TEST_ADVISE 
+    target->Set(String::NewFromUtf8(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints, target)->GetFunction());
+#endif
+
     //Context::GetCurrent()->Global()->Set(String::NewFromUtf8("ActiveXObject"), t->GetFunction());
 	NODE_DEBUG_MSG("DispObject initialized");
 }
@@ -591,9 +600,67 @@ void DispObject::NodeCast(const FunctionCallbackInfo<Value>& args) {
 	args.GetReturnValue().Set(inst);
 }
 
+#ifdef TEST_ADVISE 
+void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
+    Isolate *isolate = args.GetIsolate();
+    Local<Array> items = Array::New(isolate);
+    CComPtr<IConnectionPointContainer> cp_cont;
+    CComPtr<IEnumConnectionPoints> cp_enum;
+    
+    // prepare connecton points from arguments
+    int argcnt = args.Length();
+    if (argcnt >= 1) {
+        CComPtr<IUnknown> ptr;
+        if (Value2Unknown(isolate, args[0], &ptr)) {
+            if SUCCEEDED(ptr->QueryInterface(&cp_cont)) {
+                cp_cont->EnumConnectionPoints(&cp_enum);
+            }
+        }
+    }
+
+    // enumerate connection points
+    if (cp_enum) {
+        ULONG cnt_fetched;
+        CComPtr<IConnectionPoint> cp_ptr;
+        uint32_t cnt = 0;
+        while (SUCCEEDED(cp_enum->Next(1, &cp_ptr, &cnt_fetched)) && cnt_fetched == 1) {
+            items->Set(cnt++, ConnectionPointObject::NodeCreateInstance(isolate, cp_ptr));
+            cp_ptr.Release();
+        }
+    }
+
+    // return array of connection points
+    args.GetReturnValue().Set(items);
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------------
 
-const static std::map<std::wstring, VARTYPE> str2vt = {
+class vtypes_t {
+public:
+    inline vtypes_t(std::initializer_list<std::pair<std::wstring, VARTYPE>> recs) {
+        for (auto &rec : recs) {
+            str2vt.emplace(rec.first, rec.second);
+            vt2str.emplace(rec.second, rec.first);
+        }
+    }
+    inline bool find(VARTYPE vt, std::wstring &name) {
+        auto it = vt2str.find(vt);
+        if (it == vt2str.end()) return false;
+        name = it->second;
+        return true;
+    }
+    inline VARTYPE find(const std::wstring &name) {
+        auto it = str2vt.find(name);
+        if (it == str2vt.end()) return VT_EMPTY;
+        return it->second;
+    }
+private:
+    std::map<std::wstring, VARTYPE> str2vt;
+    std::map<VARTYPE, std::wstring> vt2str;
+};
+
+static vtypes_t vtypes({
 	{ L"char", VT_I1 },
 	{ L"uchar", VT_UI1 },
 	{ L"byte", VT_UI1 },
@@ -624,15 +691,7 @@ const static std::map<std::wstring, VARTYPE> str2vt = {
 	{ L"variant", VT_VARIANT },
 	{ L"null", VT_NULL },
 	{ L"byref", VT_BYREF }
-};
-
-static std::map<VARTYPE, std::wstring> vt2str_prepare() {
-	std::map<VARTYPE, std::wstring> map;
-	for (auto &p : str2vt) map.emplace(p.second, p.first);
-	return std::move(map);
-}
-
-const static std::map<VARTYPE, std::wstring> vt2str = vt2str_prepare();
+});
 
 bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &type) {
 	VARTYPE vt = VT_EMPTY;
@@ -649,8 +708,7 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 			}
 			if (vtstr_len > 0) {
 				std::wstring type(pvtstr, vtstr_len);
-				auto it = str2vt.find(type);
-				if (it != str2vt.end()) vt |= it->second;
+                vt |= vtypes.find(type);
 			}
 		}
 		else if (type->IsInt32()) {
@@ -822,11 +880,10 @@ void VariantObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value
 		args.GetReturnValue().Set(result);
 	}
 	else if (_wcsicmp(id, L"__type") == 0) {
-		std::wstring type;
+		std::wstring type, name;
 		if (self->value.vt & VT_BYREF) type += L"byref:";
 		if (self->value.vt & VT_ARRAY) type = L"array:";
-		auto it = vt2str.find(self->value.vt & VT_TYPEMASK);
-		if (it != vt2str.end()) type += it->second;
+        if (vtypes.find(self->value.vt & VT_TYPEMASK, name)) type += name;
 		else type += std::to_wstring(self->value.vt & VT_TYPEMASK);
 		args.GetReturnValue().Set(String::NewFromTwoByte(isolate, (uint16_t*)type.c_str()));
 	}
@@ -897,4 +954,72 @@ void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const Pro
 	isolate->ThrowException(DispError(isolate, E_NOTIMPL));
 }
 
+//-------------------------------------------------------------------------------------------------------
+#ifdef TEST_ADVISE 
+
+Local<Object> ConnectionPointObject::NodeCreateInstance(Isolate *isolate, IConnectionPoint *p) {
+    Local<Object> self;
+    if (!inst_template.IsEmpty()) {
+        self = inst_template.Get(isolate)->NewInstance();
+        (new ConnectionPointObject(p))->Wrap(self);
+    }
+    return self;
+}
+
+void ConnectionPointObject::NodeInit(const Local<Object> &target) {
+    Isolate *isolate = target->GetIsolate();
+
+    // Prepare constructor template
+    Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
+    clazz->SetClassName(String::NewFromUtf8(isolate, "ConnectionPoint"));
+
+    NODE_SET_PROTOTYPE_METHOD(clazz, "advise", NodeAdvise);
+
+    Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
+    inst->SetInternalFieldCount(1);
+
+    inst_template.Reset(isolate, inst);
+    clazz_template.Reset(isolate, clazz);
+    //target->Set(String::NewFromUtf8(isolate, "ConnectionPoint"), clazz->GetFunction());
+    NODE_DEBUG_MSG("ConnectionPointObject initialized");
+}
+
+void ConnectionPointObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
+    Isolate *isolate = args.GetIsolate();
+    Local<Object> &self = args.This();
+    (new ConnectionPointObject(args))->Wrap(self);
+    args.GetReturnValue().Set(self);
+}
+
+void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) {
+    Isolate *isolate = args.GetIsolate();
+    ConnectionPointObject *self = ConnectionPointObject::Unwrap<ConnectionPointObject>(args.This());
+    if (!self || !self->ptr) {
+        isolate->ThrowException(DispErrorInvalid(isolate));
+        return;
+    }
+    CComPtr<IUnknown> unk;
+    int argcnt = args.Length();
+    if (argcnt > 0) {
+        Local<Value> val = args[0];
+        if (!Value2Unknown(isolate, val, &unk)) {
+            if (!val.IsEmpty() && val->IsObject()) {
+                unk.Attach(new DispObjectImpl(val->ToObject()));
+            }
+        }
+    }
+    if (!unk) {
+        isolate->ThrowException(InvalidArgumentsError(isolate));
+        return;
+    }
+    DWORD dwCookie;
+    HRESULT hrcode = self->ptr->Advise(unk, &dwCookie);
+    if FAILED(hrcode) {
+        isolate->ThrowException(DispError(isolate, hrcode));
+        return;
+    }
+    args.GetReturnValue().Set(v8::Integer::New(isolate, (uint32_t)dwCookie));
+}
+
+#endif
 //-------------------------------------------------------------------------------------------------------
