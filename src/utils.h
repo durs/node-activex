@@ -166,16 +166,22 @@ public:
 
 Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2 = 0, LPCOLESTR desc = 0);
 
-inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg = 0, LPCOLESTR msg2 = 0) {
-    return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg, msg2));
+inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0) {
+	Local<Value> err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg));
+	Local<Object> obj = err->ToObject();
+	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
+	return err;
 }
 
-inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg = 0, LPCOLESTR msg2 = 0) {
+inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0) {
     CComBSTR desc;
     CComPtr<IErrorInfo> errinfo;
     HRESULT hr = GetErrorInfo(0, &errinfo);
     if (hr == S_OK) errinfo->GetDescription(&desc);
-	return Exception::Error(GetWin32ErroroMessage(isolate, hrcode, msg, msg2, desc));
+	Local<Value> err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg, desc));
+	Local<Object> obj = err->ToObject();
+	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
+	return err;
 }
 
 inline Local<Value> DispErrorNull(Isolate *isolate) {
