@@ -110,15 +110,16 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 
     // Return as property value
 	if (is_property_simple) {
+		CComException except;
 		CComVariant value;
 		VarArguments vargs;
 		if (prop_by_key) vargs.items.push_back(CComVariant(tag));
 		if (index >= 0) vargs.items.push_back(CComVariant(index));
 		LONG argcnt = (LONG)vargs.items.size();
 		VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
-		hrcode = disp->GetProperty(propid, argcnt, pargs, &value);
+		hrcode = disp->GetProperty(propid, argcnt, pargs, &value, &except);
 		if (FAILED(hrcode) && dispid != DISPID_VALUE){
-			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyGet", tag));
+			isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyGet", tag, &except));
 			return false;
 		}
 		CComPtr<IDispatch> ptr;
@@ -165,14 +166,15 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
 	}
 
 	// Set value using dispatch
+	CComException except;
     CComVariant ret;
 	VarArguments vargs(isolate, value);
 	if (index >= 0) vargs.items.push_back(CComVariant(index));
 	LONG argcnt = (LONG)vargs.items.size();
     VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
-	hrcode = disp->SetProperty(propid, argcnt, pargs, &ret);
+	hrcode = disp->SetProperty(propid, argcnt, pargs, &ret, &except);
 	if FAILED(hrcode) {
-		isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyPut", tag));
+		isolate->ThrowException(DispError(isolate, hrcode, L"DispPropertyPut", tag, &except));
         return false;
     }
 
@@ -198,17 +200,18 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
         isolate->ThrowException(DispErrorNull(isolate));
         return;
     }
-    
+
+	CComException except;
 	CComVariant ret;
 	VarArguments vargs(isolate, args);
 	LONG argcnt = (LONG)vargs.items.size();
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	HRESULT hrcode;
 
-	if ((options & option_property) == 0) hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret);
-	else hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret);
+	if ((options & option_property) == 0) hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret, &except);
+	else hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret, &except);
     if FAILED(hrcode) {
-        isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke", name.c_str()));
+        isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke", name.c_str(), &except));
         return;
     }
 

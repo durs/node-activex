@@ -122,6 +122,22 @@ public:
     }
 };
 
+class CComException: public EXCEPINFO {
+public:
+	inline CComException() {
+		memset((EXCEPINFO*)this, 0, sizeof(EXCEPINFO));
+	}
+	inline ~CComException() {
+		Clear(true);
+	}
+	inline void Clear(bool internal = false) {
+		if (bstrSource) SysFreeString(bstrSource);
+		if (bstrDescription) SysFreeString(bstrDescription);
+		if (bstrHelpFile) SysFreeString(bstrHelpFile);
+		if (!internal) memset((EXCEPINFO*)this, 0, sizeof(EXCEPINFO));
+	}
+};
+
 template <typename T = IUnknown>
 class CComPtr {
 public:
@@ -173,7 +189,7 @@ inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 
 	return err;
 }
 
-inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0) {
+inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0, EXCEPINFO *except = 0) {
     CComBSTR desc;
     CComPtr<IErrorInfo> errinfo;
     HRESULT hr = GetErrorInfo(0, &errinfo);
@@ -181,6 +197,12 @@ inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0
 	Local<Value> err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg, desc));
 	Local<Object> obj = err->ToObject();
 	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
+	if (except) {
+		if (except->wCode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->wCode));
+		if (except->scode != 0) obj->Set(String::NewFromUtf8(isolate, "scode"), Integer::New(isolate, except->scode));
+		if (except->bstrSource != 0) obj->Set(String::NewFromUtf8(isolate, "source"), String::NewFromTwoByte(isolate, (uint16_t*)except->bstrSource));
+		if (except->bstrDescription != 0) obj->Set(String::NewFromUtf8(isolate, "description"), String::NewFromTwoByte(isolate, (uint16_t*)except->bstrDescription));
+	}
 	return err;
 }
 
@@ -211,21 +233,21 @@ inline HRESULT DispFind(IDispatch *disp, LPOLESTR name, DISPID *dispid) {
 	return disp->GetIDsOfNames(GUID_NULL, names, 1, 0, dispid);
 }
 
-inline HRESULT DispInvoke(IDispatch *disp, DISPID dispid, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD) {
+inline HRESULT DispInvoke(IDispatch *disp, DISPID dispid, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD, EXCEPINFO *except = 0) {
 	DISPPARAMS params = { args, 0, argcnt, 0 };
 	DISPID dispidNamed = DISPID_PROPERTYPUT;
 	if (flags == DISPATCH_PROPERTYPUT) { // It`s a magic
 		params.cNamedArgs = 1;
 		params.rgdispidNamedArgs = &dispidNamed;
 	}
-	return disp->Invoke(dispid, IID_NULL, 0, flags, &params, ret, 0, 0);
+	return disp->Invoke(dispid, IID_NULL, 0, flags, &params, ret, except, 0);
 }
 
-inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD, DISPID *dispid = 0) {
+inline HRESULT DispInvoke(IDispatch *disp, LPOLESTR name, UINT argcnt = 0, VARIANT *args = 0, VARIANT *ret = 0, WORD  flags = DISPATCH_METHOD, DISPID *dispid = 0, EXCEPINFO *except = 0) {
 	LPOLESTR names[] = { name };
     DISPID dispids[] = { 0 };
 	HRESULT hrcode = disp->GetIDsOfNames(GUID_NULL, names, 1, 0, dispids);
-	if SUCCEEDED(hrcode) hrcode = DispInvoke(disp, dispids[0], argcnt, args, ret, flags);
+	if SUCCEEDED(hrcode) hrcode = DispInvoke(disp, dispids[0], argcnt, args, ret, flags, except);
 	if (dispid) *dispid = dispids[0];
 	return hrcode;
 }

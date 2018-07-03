@@ -113,25 +113,25 @@ public:
 		return DispFind(ptr, name, dispid);
 	}
 
-	HRESULT GetProperty(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value) {
-		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_PROPERTYGET);
+	HRESULT GetProperty(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value, EXCEPINFO *except = 0) {
+		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_PROPERTYGET, except);
 		return hrcode;
 	}
 
-	HRESULT GetProperty(DISPID dispid, LONG index, VARIANT *value) {
+	HRESULT GetProperty(DISPID dispid, LONG index, VARIANT *value, EXCEPINFO *except = 0) {
 		CComVariant arg(index);
 		LONG argcnt = (index >= 0) ? 1 : 0;
-		return DispInvoke(ptr, dispid, argcnt, &arg, value, DISPATCH_PROPERTYGET);
+		return DispInvoke(ptr, dispid, argcnt, &arg, value, DISPATCH_PROPERTYGET, except);
 	}
 
-	HRESULT SetProperty(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value) {
-		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_PROPERTYPUT);
+	HRESULT SetProperty(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value, EXCEPINFO *except = 0) {
+		HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_PROPERTYPUT, except);
 		if FAILED(hrcode) value->vt = VT_EMPTY;
 		return hrcode;
 	}
 
-    HRESULT ExecuteMethod(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value) {
-        HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_METHOD);
+    HRESULT ExecuteMethod(DISPID dispid, LONG argcnt, VARIANT *args, VARIANT *value, EXCEPINFO *except = 0) {
+        HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_METHOD, except);
         return hrcode;
     }
 };
