@@ -198,8 +198,8 @@ inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0
 	Local<Object> obj = err->ToObject();
 	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
 	if (except) {
-		if (except->wCode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->wCode));
-		if (except->scode != 0) obj->Set(String::NewFromUtf8(isolate, "scode"), Integer::New(isolate, except->scode));
+		if (except->scode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->scode));
+		else if (except->wCode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->wCode));
 		if (except->bstrSource != 0) obj->Set(String::NewFromUtf8(isolate, "source"), String::NewFromTwoByte(isolate, (uint16_t*)except->bstrSource));
 		if (except->bstrDescription != 0) obj->Set(String::NewFromUtf8(isolate, "description"), String::NewFromTwoByte(isolate, (uint16_t*)except->bstrDescription));
 	}
