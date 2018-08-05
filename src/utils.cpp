@@ -116,7 +116,7 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 	case VT_R8:
 		return Number::New(isolate, by_ref ? *v.pdblVal : v.dblVal);
 	case VT_DATE:
-		return Date::New(isolate, by_ref ? *v.pdate : v.date);
+                return Date::New(isolate, FromOleDate(by_ref ? *v.pdate : v.date));
 	case VT_DECIMAL: {
 		DOUBLE dblval;
 		if FAILED(VarR8FromDec(by_ref ? v.pdecVal : &v.decVal, &dblval)) return Undefined(isolate);
@@ -187,7 +187,7 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 		sprintf_s(buf, "%f", (double)(by_ref ? *v.pdblVal : v.dblVal));
 		break;
 	case VT_DATE:
-		return Date::New(isolate, by_ref ? *v.pdate : v.date);
+		return Date::New(isolate, FromOleDate(by_ref ? *v.pdate : v.date));
 	case VT_DECIMAL: {
 		DOUBLE dblval;
 		if FAILED(VarR8FromDec(by_ref ? v.pdecVal : &v.decVal, &dblval)) return Undefined(isolate); 
@@ -235,7 +235,7 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 	}
 	else if (val->IsDate()) {
 		var.vt = VT_DATE;
-		var.date = val->NumberValue();
+		var.date = ToOleDate(val->NumberValue());
 	}
 	else if (val->IsBoolean()) {
 		var.vt = VT_BOOL;
@@ -534,6 +534,23 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 		Value2Variant(isolate, ret, *pVarResult, VT_NULL);
 	}
 	return S_OK;
+}
+
+/*
+* Microsoft OLE Date type:
+* https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2008/82ab7w69(v=vs.90)
+*/
+
+double FromOleDate(double oleDate) {
+    double posixDate = oleDate - 25569; // days from 1899 dec 30
+    posixDate *= 24 * 60 * 60 * 1000;   // days to milliseconds
+    return posixDate;
+}
+
+double ToOleDate(double posixDate) {
+    double oleDate = posixDate / (24 * 60 * 60 * 1000); // milliseconds to days
+    oleDate += 25569;                                   // days from 1899 dec 30
+    return oleDate;
 }
 
 //-------------------------------------------------------------------------------------------------------
