@@ -299,21 +299,21 @@ bool UnknownDispGet(IUnknown *unk, IDispatch **disp) {
 	return false;
 }
 
-bool VariantUnkGet(VARIANT *v, IUnknown **unk) {
+bool VariantUnkGet(VARIANT *v, IUnknown **punk) {
+	IUnknown *unk = NULL;
     if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
-        *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
-        if (*unk) (*unk)->AddRef();
-        return true;
+		unk = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
     }
-    if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
-        *unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
-        if (*unk) (*unk)->AddRef();
-        return true;
+    else if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
+        unk = ((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal;
     }
-    return false;
+	if (!unk) return false;
+	unk->AddRef();
+	*punk = unk;
+	return true;
 }
 
-bool VariantDispGet(VARIANT *v, IDispatch **disp) {
+bool VariantDispGet(VARIANT *v, IDispatch **pdisp) {
 	/*
 	if ((v->vt & VT_ARRAY) != 0) {
 		*disp = new DispArrayImpl(*v);
@@ -322,12 +322,14 @@ bool VariantDispGet(VARIANT *v, IDispatch **disp) {
 	}
 	*/
 	if ((v->vt & VT_TYPEMASK) == VT_DISPATCH) {
-        *disp = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
-        if (*disp) (*disp)->AddRef();
+		IDispatch *disp = ((v->vt & VT_BYREF) != 0) ? *v->ppdispVal : v->pdispVal;
+		if (!disp) return false;
+        disp->AddRef();
+		*pdisp = disp;
         return true;
     }
     if ((v->vt & VT_TYPEMASK) == VT_UNKNOWN) {
-		return UnknownDispGet(((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal, disp);
+		return UnknownDispGet(((v->vt & VT_BYREF) != 0) ? *v->ppunkVal : v->punkVal, pdisp);
     }
     return false;
 }

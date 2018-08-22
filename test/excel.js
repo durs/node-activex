@@ -75,12 +75,12 @@ describe("COM from JS object", function() {
 describe("Excel with JS object", function() {
 
     it("create", function() {
-        this.timeout(5000);
+        this.timeout(10000);
         excel = new ActiveXObject("Excel.Application", { activate: true });
     });
 
     it("create workbook from test template", function() {
-        this.timeout(5000);
+        this.timeout(10000);
         if (excel) wbk = excel.Workbooks.Add(template_filename);
     });
 
