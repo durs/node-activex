@@ -1,6 +1,6 @@
 {
   "name": "winax",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
@@ -37,7 +37,7 @@
   "scripts": {
     "test": "mocha test"
   },
-  "license": "BSD",
+  "license": "MIT",
   "main": "./lib/activex",
   "os": [
     "win32"
