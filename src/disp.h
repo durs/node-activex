@@ -155,7 +155,7 @@ public:
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
 		DispObject *self = Unwrap<DispObject>(obj);
-		return self && SUCCEEDED(self->valueOf(isolate, value));
+		return self && SUCCEEDED(self->valueOf(isolate, value, false));
 	}
 	static Local<Object> NodeCreate(Isolate *isolate, IDispatch *disp, const std::wstring &name, int opt) {
 		Local<Object> parent;
@@ -171,8 +171,8 @@ private:
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
 	static void NodeRelease(const FunctionCallbackInfo<Value> &args);
 	static void NodeCast(const FunctionCallbackInfo<Value> &args);
-    static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
-	static void NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+    static void NodeGet(Local<Name> name, const PropertyCallbackInfo<Value> &args);
+	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
 	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
@@ -187,7 +187,7 @@ protected:
 	bool set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args);
 	void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
 
-	HRESULT valueOf(Isolate *isolate, VARIANT &value);
+	HRESULT valueOf(Isolate *isolate, VARIANT &value, bool simple);
 	HRESULT valueOf(Isolate *isolate, const Local<Object> &self, Local<Value> &value);
 	void toString(const FunctionCallbackInfo<Value> &args);
     Local<Value> getIdentity(Isolate *isolate);
@@ -242,8 +242,8 @@ public:
 	static void NodeCast(const FunctionCallbackInfo<Value> &args);
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
-	static void NodeGet(Local<String> name, const PropertyCallbackInfo<Value> &args);
-	static void NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+	static void NodeGet(Local<Name> name, const PropertyCallbackInfo<Value> &args);
+	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
 	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 

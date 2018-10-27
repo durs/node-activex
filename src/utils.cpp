@@ -222,25 +222,29 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 		var.vt = VT_NULL;
 	}
 	else if (val->IsInt32()) {
-		var.vt = VT_I4;
-		var.lVal = val->Int32Value();
-	}
+		//var.lVal = val->Int32Value();
+        var.lVal = val->Int32Value(isolate->GetCurrentContext()).FromMaybe(0);
+        var.vt = VT_I4;
+    }
 	else if (val->IsUint32()) {
-		var.ulVal = val->Uint32Value();
+		//var.ulVal = val->Uint32Value();
+        var.ulVal = val->Uint32Value(isolate->GetCurrentContext()).FromMaybe(0);
 		var.vt = (var.ulVal <= 0x7FFFFFFF) ? VT_I4 : VT_UI4;
 	}
 	else if (val->IsNumber()) {
-		var.vt = VT_R8;
-		var.dblVal = val->NumberValue();
-	}
+		//var.dblVal = val->NumberValue();
+        var.dblVal = val->NumberValue(isolate->GetCurrentContext()).FromMaybe(0);
+        var.vt = VT_R8;
+    }
 	else if (val->IsDate()) {
-		var.vt = VT_DATE;
-		var.date = ToOleDate(val->NumberValue());
-	}
+		//var.date = ToOleDate(val->NumberValue());
+        var.date = ToOleDate(val->NumberValue(isolate->GetCurrentContext()).FromMaybe(0));
+        var.vt = VT_DATE;
+    }
 	else if (val->IsBoolean()) {
-		var.vt = VT_BOOL;
-		var.boolVal = val->BooleanValue() ? VARIANT_TRUE : VARIANT_FALSE;
-	}
+		var.boolVal = val->BooleanValue(isolate->GetCurrentContext()).FromMaybe(false) ? VARIANT_TRUE : VARIANT_FALSE;
+        var.vt = VT_BOOL;
+    }
 	else if (val->IsArray() && (vt != VT_NULL)) {
 		Local<Array> arr = v8::Local<Array>::Cast(val);
 		uint32_t len = arr->Length();
@@ -259,7 +263,7 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 		vt = VT_EMPTY;
 	}
 	else if (val->IsObject()) {
-		Local<Object> obj = val->ToObject();
+		auto obj = Local<Object>::Cast(val);
 		if (!DispObject::GetValueOf(isolate, obj, var) && !VariantObject::GetValueOf(isolate, obj, var)) {
 			var.vt = VT_DISPATCH;
 			var.pdispVal = new DispObjectImpl(obj);
@@ -279,7 +283,7 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 
 bool Value2Unknown(Isolate *isolate, Local<Value> &val, IUnknown **unk) {
     if (val.IsEmpty() || !val->IsObject()) return false;
-    Local<Object> obj = val->ToObject();
+    auto obj = Local<Object>::Cast(val);
     CComVariant var;
     if (!DispObject::GetValueOf(isolate, obj, var) && !VariantObject::GetValueOf(isolate, obj, var)) return false;
     return VariantUnkGet(&var, unk);

@@ -29,7 +29,7 @@ DispObject::DispObject(const DispInfoPtr &ptr, const std::wstring &nm, DISPID id
         options |= option_prepared;
 	}
 	else options |= option_owned;
-	NODE_DEBUG_FMT("DispObject '%S' constructor", name.c_str());
+    NODE_DEBUG_FMT("DispObject '%S' constructor", name.c_str());
 }
 
 DispObject::~DispObject() {
@@ -72,7 +72,7 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
     HRESULT hrcode;
     DISPID propid;
 	bool prop_by_key = false;
-    if (!tag) {
+    if (!tag || !*tag) {
         tag = (LPOLESTR)name.c_str();
         propid = dispid;
     }
@@ -152,7 +152,7 @@ bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const 
 	// Search dispid
 	HRESULT hrcode;
 	DISPID propid;
-	if (!tag) {
+    if (!tag || !*tag) {
 		tag = (LPOLESTR)name.c_str();
 		propid = dispid;
 	}
@@ -208,8 +208,15 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 	VARIANT *pargs = (argcnt > 0) ? &vargs.items.front() : 0;
 	HRESULT hrcode;
 
-	if ((options & option_property) == 0) hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret, &except);
-	else hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret, &except);
+    if (vargs.IsDefault()) {
+        hrcode = valueOf(isolate, ret, true);
+    }
+    else if ((options & option_property) == 0) {
+        hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret, &except);
+    }
+    else {
+        hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret, &except);
+    }
     if FAILED(hrcode) {
         isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke", name.c_str(), &except));
         return;
@@ -232,7 +239,7 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
     args.GetReturnValue().Set(result);
 }
 
-HRESULT DispObject::valueOf(Isolate *isolate, VARIANT &value) {
+HRESULT DispObject::valueOf(Isolate *isolate, VARIANT &value, bool simple) {
 	if (!is_prepared()) prepare();
 	HRESULT hrcode;
 	if (!disp) hrcode = E_UNEXPECTED;
@@ -243,7 +250,7 @@ HRESULT DispObject::valueOf(Isolate *isolate, VARIANT &value) {
 	}
 
 	// property or array element
-	else if (dispid != DISPID_VALUE || index >= 0) {
+	else if (dispid != DISPID_VALUE || index >= 0 || simple) {
 		hrcode = disp->GetProperty(dispid, index, &value);
 	}
 
@@ -291,7 +298,7 @@ HRESULT DispObject::valueOf(Isolate *isolate, const Local<Object> &self, Local<V
 void DispObject::toString(const FunctionCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
 	CComVariant val;
-	HRESULT hrcode = valueOf(isolate, val);
+	HRESULT hrcode = valueOf(isolate, val, true);
 	if FAILED(hrcode) {
 		isolate->ThrowException(Win32Error(isolate, hrcode, L"DispToString"));
 		return;
@@ -300,6 +307,7 @@ void DispObject::toString(const FunctionCallbackInfo<Value> &args) {
 }
 
 Local<Value> DispObject::getIdentity(Isolate *isolate) {
+    //wchar_t buf[64];
     std::wstring id;
     id.reserve(128);
     id += name;
@@ -309,6 +317,12 @@ Local<Value> DispObject::getIdentity(Isolate *isolate) {
     while (ptr) {
         id.insert(0, L".");
         id.insert(0, ptr->name);
+        /*
+        if (ptr->index >= 0) {
+            swprintf_s(buf, L"[%ld]", index);
+            id += buf;
+        }
+        */
         ptr = ptr->parent.lock();
     }
     return String::NewFromTwoByte(isolate, (uint16_t*)id.c_str());
@@ -348,8 +362,8 @@ void DispObject::NodeInit(const Local<Object> &target) {
 
     Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
-    inst->SetNamedPropertyHandler(NodeGet, NodeSet);
-    inst->SetIndexedPropertyHandler(NodeGetByIndex, NodeSetByIndex);
+    inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
+    inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
     inst->SetCallAsFunctionHandler(NodeCall);
 	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__id"), NodeGet);
 	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__value"), NodeGet);
@@ -391,14 +405,14 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     if (argcnt > 1) {
         Local<Value> argopt = args[1];
         if (!argopt.IsEmpty() && argopt->IsObject()) {
-            Local<Object> opt = argopt->ToObject();
-            if (!v8val2bool(opt->Get(String::NewFromUtf8(isolate, "async")), true)) {
+            auto opt = Local<Object>::Cast(argopt);
+            if (!v8val2bool(isolate, opt->Get(String::NewFromUtf8(isolate, "async")), true)) {
                 options &= ~option_async;
             }
-            if (!v8val2bool(opt->Get(String::NewFromUtf8(isolate, "type")), true)) {
+            if (!v8val2bool(isolate, opt->Get(String::NewFromUtf8(isolate, "type")), true)) {
                 options &= ~option_type;
             }
-			if (v8val2bool(opt->Get(String::NewFromUtf8(isolate, "activate")), false)) {
+			if (v8val2bool(isolate, opt->Get(String::NewFromUtf8(isolate, "activate")), false)) {
 				options |= option_activate;
 			}
 		}
@@ -427,8 +441,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	if (args[0]->IsString()) {
 
 		// Prepare arguments
-		Local<String> progid = args[0]->ToString();
-		String::Value vname(progid);
+        String::Value vname(args[0]);
 		if (vname.length() <= 0) hrcode = E_INVALIDARG;
 		else {
 			name.assign((LPOLESTR)*vname, vname.length());
@@ -451,7 +464,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	// Create dispatch object from javascript object
 	else if (args[0]->IsObject()) {
 		name = L"#";
-		disp = new DispObjectImpl(args[0]->ToObject());
+		disp = new DispObjectImpl(Local<Object>::Cast(args[0]));
 		hrcode = S_OK;
 	}
 
@@ -472,14 +485,13 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	}
 }
 
-void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& args) {
+void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
-	
 	String::Value vname(name);
 	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
@@ -500,13 +512,13 @@ void DispObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& 
 		if (clazz.IsEmpty()) args.GetReturnValue().SetNull();
 		else args.GetReturnValue().Set(clazz_template.Get(isolate)->GetFunction());
 	}
-	else if (_wcsicmp(id, L"valueOf") == 0) {
+	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction());
 	}
-	else {
+    else {
 		self->get(id, -1, args);
 	}
 }
@@ -522,7 +534,7 @@ void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value
     self->get(0, index, args);
 }
 
-void DispObject::NodeSet(Local<String> name, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
+void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
@@ -587,9 +599,9 @@ void DispObject::NodeRelease(const FunctionCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
     int rcnt = 0, argcnt = args.Length();
     for (int argi = 0; argi < argcnt; argi++) {
-        Local<Value> &obj = args[argi];
+        auto &obj = args[argi];
         if (obj->IsObject()) {
-            Local<Object> disp_obj = obj->ToObject();
+            auto disp_obj = Local<Object>::Cast(obj);
             DispObject *disp = DispObject::Unwrap<DispObject>(disp_obj);
             if (disp && disp->release())
                 rcnt ++;
@@ -700,8 +712,7 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 	VARTYPE vt = VT_EMPTY;
 	if (!type.IsEmpty()) {
 		if (type->IsString()) {
-			Local<String> vtval = type->ToString();
-			String::Value vtstr(vtval);
+			String::Value vtstr(type);
 			const wchar_t *pvtstr = (const wchar_t *)*vtstr;
 			int vtstr_len = vtstr.length();
 			if (vtstr_len > 0 && *pvtstr == 'p') {
@@ -715,7 +726,7 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 			}
 		}
 		else if (type->IsInt32()) {
-			vt |= type->Int32Value();
+			vt |= type->Int32Value(isolate->GetCurrentContext()).FromMaybe(0);
 		}
 	}
 
@@ -733,7 +744,7 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 	else {
 		VARIANT *refvalue = nullptr;
 		VARTYPE vt_noref = vt & ~VT_BYREF;
-		VariantObject *ref = (!val.IsEmpty() && val->IsObject()) ? GetInstanceOf(isolate, val->ToObject()) : nullptr;
+		VariantObject *ref = (!val.IsEmpty() && val->IsObject()) ? GetInstanceOf(isolate, Local<Object>::Cast(val)) : nullptr;
 		if (ref) {
 			if ((ref->value.vt & VT_BYREF) != 0) value = ref->value;
 			else refvalue = &ref->value;
@@ -779,9 +790,9 @@ void VariantObject::NodeInit(const Local<Object> &target) {
 
 	Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
 	inst->SetInternalFieldCount(1);
-	inst->SetNamedPropertyHandler(NodeGet, NodeSet);
-	inst->SetIndexedPropertyHandler(NodeGetByIndex, NodeSetByIndex);
-	//inst->SetCallAsFunctionHandler(NodeCall);
+    inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
+    inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
+    //inst->SetCallAsFunctionHandler(NodeCall);
 	//inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__id"), NodeGet);
 	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__value"), NodeGet);
 	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__type"), NodeGet);
@@ -869,7 +880,7 @@ void VariantObject::NodeToString(const FunctionCallbackInfo<Value>& args) {
 	args.GetReturnValue().Set(result);
 }
 
-void VariantObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
@@ -904,7 +915,7 @@ void VariantObject::NodeGet(Local<String> name, const PropertyCallbackInfo<Value
 	else if (_wcsicmp(id, L"cast") == 0) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeCast, args.This())->GetFunction());
 	}
-	else if (_wcsicmp(id, L"valueOf") == 0) {
+	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
 		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
@@ -937,7 +948,7 @@ void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Va
 	args.GetReturnValue().Set(result);
 }
 
-void VariantObject::NodeSet(Local<String> name, Local<Value> val, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeSet(Local<Name> name, Local<Value> val, const PropertyCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {

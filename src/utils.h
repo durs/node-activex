@@ -183,8 +183,8 @@ public:
 Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2 = 0, LPCOLESTR desc = 0);
 
 inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0) {
-	Local<Value> err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg));
-	Local<Object> obj = err->ToObject();
+	auto err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg));
+	auto obj = Local<Object>::Cast(err);
 	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
 	return err;
 }
@@ -194,8 +194,8 @@ inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0
     CComPtr<IErrorInfo> errinfo;
     HRESULT hr = GetErrorInfo(0, &errinfo);
     if (hr == S_OK) errinfo->GetDescription(&desc);
-	Local<Value> err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg, desc));
-	Local<Object> obj = err->ToObject();
+	auto err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg, desc));
+	auto obj = Local<Object>::Cast(err);
 	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
 	if (except) {
 		if (except->scode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->scode));
@@ -304,11 +304,11 @@ bool UnknownDispGet(IUnknown *unk, IDispatch **disp);
 
 //-------------------------------------------------------------------------------------------------------
 
-inline bool v8val2bool(const Local<Value> &v, bool def) {
+inline bool v8val2bool(Isolate *isolate, const Local<Value> &v, bool def) {
     if (v.IsEmpty()) return def;
-    if (v->IsBoolean()) return v->BooleanValue();
-    if (v->IsInt32()) return v->Int32Value() != 0;
-    if (v->IsUint32()) return v->Uint32Value() != 0;
+    if (v->IsBoolean()) return v->BooleanValue(isolate->GetCurrentContext()).FromMaybe(def);
+    if (v->IsInt32()) return v->Int32Value(isolate->GetCurrentContext()).FromMaybe(def ? 1 : 0) != 0;
+    if (v->IsUint32()) return v->Uint32Value(isolate->GetCurrentContext()).FromMaybe(def ? 1 : 0) != 0;
     return def;
 }
 
@@ -328,6 +328,12 @@ public:
 		for (int i = 0; i < argcnt; i ++)
 			Value2Variant(isolate, args[argcnt - i - 1], items[i]);
 	}
+    inline bool IsDefault() {
+        if (items.size() != 1) return false;
+        auto &arg = items[0];
+        if (arg.vt != VT_BSTR || arg.bstrVal == nullptr) return false;
+        return wcscmp(arg.bstrVal, L"default") == 0;
+    }
 };
 
 class NodeArguments {
