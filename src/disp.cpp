@@ -377,6 +377,7 @@ void DispObject::NodeInit(const Local<Object> &target) {
 
 #ifdef TEST_ADVISE 
     target->Set(String::NewFromUtf8(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints, target)->GetFunction());
+    target->Set(String::NewFromUtf8(isolate, "peekAndDispatchMessages"), FunctionTemplate::New(isolate, PeakAndDispatchMessages, target)->GetFunction());
 #endif
 
     //Context::GetCurrent()->Global()->Set(String::NewFromUtf8("ActiveXObject"), t->GetFunction());
@@ -646,6 +647,12 @@ void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
 
     // return array of connection points
     args.GetReturnValue().Set(items);
+}
+void DispObject::PeakAndDispatchMessages(const FunctionCallbackInfo<Value>& args) {
+    MSG msg;
+    while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+        DispatchMessage(&msg);
+    }
 }
 #endif
 
