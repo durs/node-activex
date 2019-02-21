@@ -179,6 +179,7 @@ private:
 
 #ifdef TEST_ADVISE 
     static void NodeConnectionPoints(const FunctionCallbackInfo<Value> &args);
+    static void PeakAndDispatchMessages(const FunctionCallbackInfo<Value> &args);
 #endif
 
 protected:
