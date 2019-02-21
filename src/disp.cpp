@@ -1024,8 +1024,9 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
     if (argcnt > 0) {
         Local<Value> val = args[0];
         if (!Value2Unknown(isolate, val, &unk)) {
-            if (!val.IsEmpty() && val->IsObject()) {
-                unk.Attach(new DispObjectImpl(val->ToObject()));
+			Local<Object> obj;
+            if (!val.IsEmpty() && val->IsObject() && val->ToObject(isolate->GetCurrentContext()).ToLocal(&obj)) {
+                unk.Attach(new DispObjectImpl(obj));
             }
         }
     }

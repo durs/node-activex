@@ -452,6 +452,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
     // TODO START @asinbow Write proper code
     // 1. get event name from dispIdMember and IDispatch->IConnectionPoints->...
 	// 2. invoke callback by event name
+    /*
 	if ((wFlags & DISPATCH_METHOD) != 0) {
 		NodeArguments args(isolate, pDispParams, true);
 		int argcnt = (int)args.items.size();
@@ -463,10 +464,11 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 		}
 		return S_OK;
 	}
+    */
 	// TODO END @asinbow Write proper code
 
 	// Prepare name by member id
-	if (dispIdMember != DISPID_VALUE) {
+	if (dispIdMember != DISPID_VALUE && !index.empty()) {
 		index_t::const_iterator p = index.find(dispIdMember);
 		if (p == index.end()) return DISP_E_MEMBERNOTFOUND;
 		name_t &info = *p->second;
