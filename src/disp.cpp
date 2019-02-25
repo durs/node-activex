@@ -620,14 +620,14 @@ void DispObject::NodeCast(const FunctionCallbackInfo<Value>& args) {
 void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
     Local<Array> items = Array::New(isolate);
+    CComPtr<IDispatch> ptr;
     CComPtr<IConnectionPointContainer> cp_cont;
     CComPtr<IEnumConnectionPoints> cp_enum;
     
     // prepare connecton points from arguments
     int argcnt = args.Length();
     if (argcnt >= 1) {
-        CComPtr<IUnknown> ptr;
-        if (Value2Unknown(isolate, args[0], &ptr)) {
+        if (Value2Unknown(isolate, args[0], (IUnknown**)&ptr)) {
             if SUCCEEDED(ptr->QueryInterface(&cp_cont)) {
                 cp_cont->EnumConnectionPoints(&cp_enum);
             }
@@ -640,7 +640,7 @@ void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
         CComPtr<IConnectionPoint> cp_ptr;
         uint32_t cnt = 0;
         while (SUCCEEDED(cp_enum->Next(1, &cp_ptr, &cnt_fetched)) && cnt_fetched == 1) {
-            items->Set(cnt++, ConnectionPointObject::NodeCreateInstance(isolate, cp_ptr));
+            items->Set(cnt++, ConnectionPointObject::NodeCreateInstance(isolate, cp_ptr, ptr));
             cp_ptr.Release();
         }
     }
@@ -978,11 +978,88 @@ void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const Pro
 //-------------------------------------------------------------------------------------------------------
 #ifdef TEST_ADVISE 
 
-Local<Object> ConnectionPointObject::NodeCreateInstance(Isolate *isolate, IConnectionPoint *p) {
+ConnectionPointObject::ConnectionPointObject(IConnectionPoint *p, IDispatch *d)
+  : ptr(p), disp(d) {
+    InitIndex();
+}
+
+bool ConnectionPointObject::InitIndex() {
+  if (!ptr || !disp) {
+    return false;
+  }
+  UINT typeindex = 0;
+  CComPtr<ITypeInfo> typeinfo;
+  if FAILED(disp->GetTypeInfo(typeindex, LOCALE_USER_DEFAULT, &typeinfo)) {
+    return false;
+  }
+
+  CComPtr<ITypeLib> typelib;
+  if FAILED(typeinfo->GetContainingTypeLib(&typelib, &typeindex)) {
+    return false;
+  }
+
+  IID conniid;
+  if FAILED(ptr->GetConnectionInterface(&conniid)) {
+    return false;
+  }
+
+  CComPtr<ITypeInfo> conninfo;
+  if FAILED(typelib->GetTypeInfoOfGuid(conniid, &conninfo)) {
+    return false;
+  }
+
+  TYPEATTR *typeattr = nullptr;
+  if FAILED(conninfo->GetTypeAttr(&typeattr)) {
+    return false;
+  }
+
+  if (typeattr->typekind != TKIND_DISPATCH) {
+    conninfo->ReleaseTypeAttr(typeattr);
+    return false;
+  }
+
+  for (UINT fd = 0; fd < typeattr->cFuncs; ++fd) {
+    FUNCDESC *funcdesc;
+    if FAILED(conninfo->GetFuncDesc(fd, &funcdesc)) {
+      continue;
+    }
+    if (!funcdesc) {
+      break;
+    }
+
+    if (funcdesc->invkind != INVOKE_FUNC || funcdesc->funckind != FUNC_DISPATCH) {
+      conninfo->ReleaseFuncDesc(funcdesc);
+      continue;
+    }
+
+    // const size_t nameSize = 256;
+    const size_t nameSize = 1; // only event function name required
+    BSTR bstrNames[nameSize];
+    UINT maxNames = nameSize;
+    UINT maxNamesOut = 0;
+    if SUCCEEDED(conninfo->GetNames(funcdesc->memid, reinterpret_cast<BSTR *>(&bstrNames), maxNames, &maxNamesOut)) {
+      DISPID id = funcdesc->memid;
+      std::wstring funcname(bstrNames[0]);
+      index.insert(std::pair<DISPID, DispObjectImpl::name_ptr>(id, new DispObjectImpl::name_t(id, funcname)));
+
+      for (size_t i = 0; i < maxNamesOut; i++) {
+        SysFreeString(bstrNames[i]);
+      }
+    }
+
+    conninfo->ReleaseFuncDesc(funcdesc);
+  }
+
+  conninfo->ReleaseTypeAttr(typeattr);
+
+  return true;
+}
+
+Local<Object> ConnectionPointObject::NodeCreateInstance(Isolate *isolate, IConnectionPoint *p, IDispatch* d) {
     Local<Object> self;
     if (!inst_template.IsEmpty()) {
         self = inst_template.Get(isolate)->NewInstance();
-        (new ConnectionPointObject(p))->Wrap(self);
+        (new ConnectionPointObject(p, d))->Wrap(self);
     }
     return self;
 }
@@ -1024,9 +1101,14 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
     if (argcnt > 0) {
         Local<Value> val = args[0];
         if (!Value2Unknown(isolate, val, &unk)) {
-			Local<Object> obj;
+            Local<Object> obj;
             if (!val.IsEmpty() && val->IsObject() && val->ToObject(isolate->GetCurrentContext()).ToLocal(&obj)) {
-                unk.Attach(new DispObjectImpl(obj));
+                DispObjectImpl *impl = new DispObjectImpl(obj);
+                impl->index = self->index;
+                if (self->index.size()) {
+                    impl->dispid_next = self->index.rbegin()->first + 1;
+                }
+                unk.Attach(impl);
             }
         }
     }
