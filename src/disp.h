@@ -258,16 +258,21 @@ private:
 class ConnectionPointObject : public ObjectWrap
 {
 public:
-    ConnectionPointObject(IConnectionPoint *p): ptr(p) {}
+    ConnectionPointObject(IConnectionPoint *p, IDispatch* d);
     ConnectionPointObject(const FunctionCallbackInfo<Value> &args) {}
     static Persistent<ObjectTemplate> inst_template;
     static Persistent<FunctionTemplate> clazz_template;
-    static Local<Object> NodeCreateInstance(Isolate *isolate, IConnectionPoint *p);
+    static Local<Object> NodeCreateInstance(Isolate *isolate, IConnectionPoint *p, IDispatch* d);
     static void NodeInit(const Local<Object> &target);
     static void NodeCreate(const FunctionCallbackInfo<Value> &args);
     static void NodeAdvise(const FunctionCallbackInfo<Value> &args);
+
 private:
+    bool InitIndex();
+
     CComPtr<IConnectionPoint> ptr;
+    CComPtr<IDispatch> disp;
+    DispObjectImpl::index_t index;
 };
 
 #endif

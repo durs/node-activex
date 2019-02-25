@@ -449,24 +449,6 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 	Local<Object> self = obj.Get(isolate);
 	Local<Value> name, val, ret;
 
-    // TODO START @asinbow Write proper code
-    // 1. get event name from dispIdMember and IDispatch->IConnectionPoints->...
-	// 2. invoke callback by event name
-    /*
-	if ((wFlags & DISPATCH_METHOD) != 0) {
-		NodeArguments args(isolate, pDispParams, true);
-		int argcnt = (int)args.items.size();
-		Local<Value> *argptr = (argcnt > 0) ? &args.items[0] : nullptr;
-		if (self->IsFunction()) {
-			Local<Function> func = Local<Function>::Cast(self);
-			if (func.IsEmpty()) return DISP_E_BADCALLEE;
-			ret = func->Call(self, argcnt, argptr);
-		}
-		return S_OK;
-	}
-    */
-	// TODO END @asinbow Write proper code
-
 	// Prepare name by member id
 	if (dispIdMember != DISPID_VALUE && !index.empty()) {
 		index_t::const_iterator p = index.find(dispIdMember);
