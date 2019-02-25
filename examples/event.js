@@ -36,13 +36,13 @@ connectionPoint.advise({
     console.log('SheetDeactivate event triggerred');
   },
   SheetSelectionChange: function (worksheet, range) {
-    var worksheet1 = range; // it's a bug now: args in reversal order
-    var range = worksheet;
+    //var worksheet1 = range; // it's a bug now: args in reversal order
+    //var range = worksheet;
     console.log('SheetSelectionChange event triggerred', range.Address);
   },
   SheetChange: function (worksheet, range) {
-    var worksheet1 = range; // it's a bug now: args in reversal order
-    var range = worksheet;
+    //var worksheet1 = range; // it's a bug now: args in reversal order
+    //var range = worksheet;
     console.log('SheetChange event triggerred', range.Address, range.Value);
   },
 });

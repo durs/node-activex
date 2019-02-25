@@ -339,11 +339,11 @@ public:
 class NodeArguments {
 public:
 	std::vector<Local<Value>> items;
-	NodeArguments(Isolate *isolate, DISPPARAMS *pDispParams, bool allow_disp) {
+	NodeArguments(Isolate *isolate, DISPPARAMS *pDispParams, bool allow_disp, bool reverse_arguments = true) {
 		UINT argcnt = pDispParams->cArgs;
 		items.resize(argcnt);
 		for (UINT i = 0; i < argcnt; i++) {
-			items[i] = Variant2Value(isolate, pDispParams->rgvarg[argcnt - i - 1], allow_disp);
+			items[i] = Variant2Value(isolate, pDispParams->rgvarg[reverse_arguments ? argcnt - i - 1 : i], allow_disp);
 		}
 	}
 };
@@ -425,8 +425,9 @@ public:
 	DISPID dispid_next;
 	names_t names;
 	index_t index;
+	bool reverse_arguments;
 
-	inline DispObjectImpl(const Local<Object> &_obj) : obj(Isolate::GetCurrent(), _obj), dispid_next(1) {}
+	inline DispObjectImpl(const Local<Object> &_obj, bool revargs = true) : obj(Isolate::GetCurrent(), _obj), dispid_next(1), reverse_arguments(revargs){}
 	virtual ~DispObjectImpl() { obj.Reset(); }
 
 	// IUnknown interface

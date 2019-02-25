@@ -500,7 +500,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 	// Call property as method
 	if ((wFlags & DISPATCH_METHOD) != 0) {
 		wFlags = 0;
-		NodeArguments args(isolate, pDispParams, true);
+		NodeArguments args(isolate, pDispParams, true, reverse_arguments);
 		int argcnt = (int)args.items.size();
 		Local<Value> *argptr = (argcnt > 0) ? &args.items[0] : nullptr;
 		if (val->IsFunction()) {

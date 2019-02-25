@@ -111,7 +111,7 @@ describe("Excel with JS object", function() {
     });
 
     it("invoke test method", function() {
-        if (wbk && com_obj) assert.equal(js_obj.func(test_func_arg), wbk.Test(com_obj, 'func', 0, test_func_arg));
+        if (wbk && com_obj) assert.equal(js_obj.func(test_func_arg, 1), wbk.Test(com_obj, 'func', 0, test_func_arg));
     });
 
     it("quit", function() {

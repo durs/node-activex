@@ -152,7 +152,7 @@ This project uses Visual C++ 2013 (or later versions then support C++11 standard
 Bulding also requires node-gyp and python 2.6 (or later) to be installed. 
 You can do this with npm:
 ```
-npm install -g node-gyp
+npm install --global --production windows-build-tools
 ```
 To obtain and build use console commands:
 ```

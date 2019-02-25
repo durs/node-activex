@@ -1103,7 +1103,7 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
         if (!Value2Unknown(isolate, val, &unk)) {
             Local<Object> obj;
             if (!val.IsEmpty() && val->IsObject() && val->ToObject(isolate->GetCurrentContext()).ToLocal(&obj)) {
-                DispObjectImpl *impl = new DispObjectImpl(obj);
+                DispObjectImpl *impl = new DispObjectImpl(obj, false);
                 impl->index = self->index;
                 if (self->index.size()) {
                     impl->dispid_next = self->index.rbegin()->first + 1;
