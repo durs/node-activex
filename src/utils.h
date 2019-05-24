@@ -12,16 +12,48 @@
 #define NODE_DEBUG
 #endif
 
-#ifdef NODE_DEBUG
-#define NODE_DEBUG_PREFIX "### "
-#define NODE_DEBUG_MSG(msg) { printf(NODE_DEBUG_PREFIX"%s", msg); std::cout << std::endl; }
-#define NODE_DEBUG_FMT(msg, arg) { std::cout << NODE_DEBUG_PREFIX; printf(msg, arg); std::cout << std::endl; }
-#define NODE_DEBUG_FMT2(msg, arg, arg2) { std::cout << NODE_DEBUG_PREFIX; printf(msg, arg, arg2); std::cout << std::endl; }
-#else
-#define NODE_DEBUG_MSG(msg)
-#define NODE_DEBUG_FMT(msg, arg)
-#define NODE_DEBUG_FMT2(msg, arg, arg2)
+#if V8_MAJOR_VERSION >= 7
+#if V8_MINOR_VERSION > 0	// node v11.13
+	#define NODE_BOOL_ISOLATE
 #endif
+#endif
+
+#ifdef NODE_BOOL_ISOLATE
+#define NODE_BOOL(isolate, v) v->BooleanValue(isolate)
+#else
+#define NODE_BOOL(isolate, v) v->BooleanValue(isolate->GetCurrentContext()).FromMaybe(false)
+#endif
+
+#ifdef NODE_DEBUG
+	#define NODE_DEBUG_PREFIX "### "
+	#define NODE_DEBUG_MSG(msg) { printf(NODE_DEBUG_PREFIX"%s", msg); std::cout << std::endl; }
+	#define NODE_DEBUG_FMT(msg, arg) { std::cout << NODE_DEBUG_PREFIX; printf(msg, arg); std::cout << std::endl; }
+	#define NODE_DEBUG_FMT2(msg, arg, arg2) { std::cout << NODE_DEBUG_PREFIX; printf(msg, arg, arg2); std::cout << std::endl; }
+#else
+	#define NODE_DEBUG_MSG(msg)
+	#define NODE_DEBUG_FMT(msg, arg)
+	#define NODE_DEBUG_FMT2(msg, arg, arg2)
+#endif
+
+inline Local<String> v8str(Isolate *isolate, const char *text) {
+	Local<String> str;
+	if (!text || !String::NewFromUtf8(isolate, text, NewStringType::kNormal).ToLocal(&str)) {
+		str = String::Empty(isolate);
+	}
+	return str;
+}
+
+inline Local<String> v8str(Isolate *isolate, const uint16_t *text) {
+	Local<String> str;
+	if (!text || !String::NewFromTwoByte(isolate, (const uint16_t*)text, NewStringType::kNormal).ToLocal(&str)) {
+		str = String::Empty(isolate);
+	}
+	return str;
+}
+
+inline Local<String> v8str(Isolate *isolate, const wchar_t *text) {
+	return v8str(isolate, (const uint16_t *)text);
+}
 
 //-------------------------------------------------------------------------------------------------------
 #ifndef USE_ATL
@@ -185,45 +217,46 @@ Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR 
 inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0) {
 	auto err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg));
 	auto obj = Local<Object>::Cast(err);
-	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
+	obj->Set(isolate->GetCurrentContext(), v8str(isolate, "errno"), Integer::New(isolate, hrcode));
 	return err;
 }
 
 inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0, EXCEPINFO *except = 0) {
-    CComBSTR desc;
+	Local<Context> ctx = isolate->GetCurrentContext();
+	CComBSTR desc;
     CComPtr<IErrorInfo> errinfo;
     HRESULT hr = GetErrorInfo(0, &errinfo);
     if (hr == S_OK) errinfo->GetDescription(&desc);
 	auto err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg, desc));
 	auto obj = Local<Object>::Cast(err);
-	obj->Set(String::NewFromUtf8(isolate, "errno"), Integer::New(isolate, hrcode));
+	obj->Set(ctx, v8str(isolate, "errno"), Integer::New(isolate, hrcode));
 	if (except) {
-		if (except->scode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->scode));
-		else if (except->wCode != 0) obj->Set(String::NewFromUtf8(isolate, "code"), Integer::New(isolate, except->wCode));
-		if (except->bstrSource != 0) obj->Set(String::NewFromUtf8(isolate, "source"), String::NewFromTwoByte(isolate, (uint16_t*)except->bstrSource));
-		if (except->bstrDescription != 0) obj->Set(String::NewFromUtf8(isolate, "description"), String::NewFromTwoByte(isolate, (uint16_t*)except->bstrDescription));
+		if (except->scode != 0) obj->Set(ctx, v8str(isolate, "code"), Integer::New(isolate, except->scode));
+		else if (except->wCode != 0) obj->Set(ctx, v8str(isolate, "code"), Integer::New(isolate, except->wCode));
+		if (except->bstrSource != 0) obj->Set(ctx, v8str(isolate, "source"), v8str(isolate, except->bstrSource));
+		if (except->bstrDescription != 0) obj->Set(ctx, v8str(isolate, "description"), v8str(isolate, except->bstrDescription));
 	}
 	return err;
 }
 
 inline Local<Value> DispErrorNull(Isolate *isolate) {
-    return Exception::TypeError(String::NewFromUtf8(isolate, "DispNull"));
+    return Exception::TypeError(v8str(isolate, "DispNull"));
 }
 
 inline Local<Value> DispErrorInvalid(Isolate *isolate) {
-    return Exception::TypeError(String::NewFromUtf8(isolate, "DispInvalid"));
+    return Exception::TypeError(v8str(isolate, "DispInvalid"));
 }
 
 inline Local<Value> TypeError(Isolate *isolate, const char *msg) {
-    return Exception::TypeError(String::NewFromUtf8(isolate, msg));
+    return Exception::TypeError(v8str(isolate, msg));
 }
 
 inline Local<Value> InvalidArgumentsError(Isolate *isolate) {
-    return Exception::TypeError(String::NewFromUtf8(isolate, "Invalid arguments"));
+    return Exception::TypeError(v8str(isolate, "Invalid arguments"));
 }
 
 inline Local<Value> Error(Isolate *isolate, const char *msg) {
-    return Exception::Error(String::NewFromUtf8(isolate, msg));
+    return Exception::Error(v8str(isolate, msg));
 }
 
 //-------------------------------------------------------------------------------------------------------
@@ -305,10 +338,11 @@ bool UnknownDispGet(IUnknown *unk, IDispatch **disp);
 //-------------------------------------------------------------------------------------------------------
 
 inline bool v8val2bool(Isolate *isolate, const Local<Value> &v, bool def) {
+	Local<Context> ctx = isolate->GetCurrentContext();
     if (v.IsEmpty()) return def;
-    if (v->IsBoolean()) return v->BooleanValue(isolate->GetCurrentContext()).FromMaybe(def);
-    if (v->IsInt32()) return v->Int32Value(isolate->GetCurrentContext()).FromMaybe(def ? 1 : 0) != 0;
-    if (v->IsUint32()) return v->Uint32Value(isolate->GetCurrentContext()).FromMaybe(def ? 1 : 0) != 0;
+    if (v->IsBoolean()) return NODE_BOOL(isolate, v);
+    if (v->IsInt32()) return v->Int32Value(ctx).FromMaybe(def ? 1 : 0) != 0;
+    if (v->IsUint32()) return v->Uint32Value(ctx).FromMaybe(def ? 1 : 0) != 0;
     return def;
 }
 

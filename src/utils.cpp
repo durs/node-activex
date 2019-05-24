@@ -70,12 +70,13 @@ char *GetWin32ErroroMessage(char *buf, size_t buflen, Isolate *isolate, HRESULT 
 
 Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2, LPCOLESTR desc) {
 	uint16_t buf_wide[ERROR_MESSAGE_WIDE_MAXSIZE];
-	return String::NewFromTwoByte(isolate, GetWin32ErroroMessage(buf_wide, ERROR_MESSAGE_WIDE_MAXSIZE, isolate, hrcode, msg, msg2, desc));
+	return v8str(isolate, GetWin32ErroroMessage(buf_wide, ERROR_MESSAGE_WIDE_MAXSIZE, isolate, hrcode, msg, msg2, desc));
 }
 
 //-------------------------------------------------------------------------------------------------------
 
 Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
+	Local<Context> ctx = isolate->GetCurrentContext();
 	if ((v.vt & VT_ARRAY) == 0) return Null(isolate);
 	SAFEARRAY *varr = (v.vt & VT_BYREF) != 0 ? *v.pparray : v.parray;
 	if (!varr || varr->cDims != 1) return Null(isolate);
@@ -86,7 +87,7 @@ Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
 		CComVariant vi;
 		if SUCCEEDED(SafeArrayGetElement(varr, &i, (vt == VT_VARIANT) ? (void*)&vi : (void*)&vi.byref)) {
 			if (vt != VT_VARIANT) vi.vt = vt;
-			arr->Set((uint32_t)i, Variant2Value(isolate, vi, true));
+			arr->Set(ctx, (uint32_t)i, Variant2Value(isolate, vi, true));
 		}
 	}
 	return arr;
@@ -115,8 +116,12 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 		return Number::New(isolate, by_ref ? *v.pfltVal : v.fltVal);
 	case VT_R8:
 		return Number::New(isolate, by_ref ? *v.pdblVal : v.dblVal);
-	case VT_DATE:
-                return Date::New(isolate, FromOleDate(by_ref ? *v.pdate : v.date));
+	case VT_DATE: {
+		Local<Value> ret;
+		if (!Date::New(isolate->GetCurrentContext(), FromOleDate(by_ref ? *v.pdate : v.date)).ToLocal(&ret))
+			ret = Undefined(isolate);
+		return ret;
+	}
 	case VT_DECIMAL: {
 		DOUBLE dblval;
 		if FAILED(VarR8FromDec(by_ref ? v.pdecVal : &v.decVal, &dblval)) return Undefined(isolate);
@@ -134,19 +139,19 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 			}
 			return DispObject::NodeCreate(isolate, disp, L"Dispatch", option_auto);
 		}
-		return String::NewFromUtf8(isolate, "[Dispatch]");
+		return v8str(isolate, "[Dispatch]");
 	}
 	case VT_UNKNOWN: {
 		CComPtr<IDispatch> disp;
 		if (allow_disp && UnknownDispGet(by_ref ? *v.ppunkVal : v.punkVal, &disp)) {
 			return DispObject::NodeCreate(isolate, disp, L"Unknown", option_auto);
 		}
-		return String::NewFromUtf8(isolate, "[Unknown]");
+		return v8str(isolate, "[Unknown]");
 	}
 	case VT_BSTR: {
         BSTR bstr = by_ref ? (v.pbstrVal ? *v.pbstrVal : nullptr) : v.bstrVal;
         if (!bstr) return String::Empty(isolate);
-		return String::NewFromTwoByte(isolate, (uint16_t*)bstr);
+		return v8str(isolate, bstr);
     }
 	case VT_VARIANT: 
 		if (v.pvarVal) return Variant2Value(isolate, *v.pvarVal, allow_disp);
@@ -186,8 +191,12 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 	case VT_R8:
 		sprintf_s(buf, "%f", (double)(by_ref ? *v.pdblVal : v.dblVal));
 		break;
-	case VT_DATE:
-		return Date::New(isolate, FromOleDate(by_ref ? *v.pdate : v.date));
+	case VT_DATE: {
+		Local<Value> ret;
+		if (!Date::New(isolate->GetCurrentContext(), FromOleDate(by_ref ? *v.pdate : v.date)).ToLocal(&ret))
+			ret = Undefined(isolate);
+		return ret;
+	}
 	case VT_DECIMAL: {
 		DOUBLE dblval;
 		if FAILED(VarR8FromDec(by_ref ? v.pdecVal : &v.decVal, &dblval)) return Undefined(isolate); 
@@ -208,13 +217,14 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 	default:
 		CComVariant tmp;
 		if (SUCCEEDED(VariantChangeType(&tmp, &v, 0, VT_BSTR)) && tmp.vt == VT_BSTR && v.bstrVal != nullptr) {
-			return String::NewFromTwoByte(isolate, (uint16_t*)v.bstrVal);
+			return v8str(isolate, v.bstrVal);
 		}
 	}
-	return String::NewFromUtf8(isolate, buf, String::kNormalString);
+	return v8str(isolate, buf);
 }
 
 void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt) {
+	Local<Context> ctx = isolate->GetCurrentContext();
 	if (val.IsEmpty() || val->IsUndefined()) {
 		var.vt = VT_EMPTY;
 	}
@@ -223,26 +233,26 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 	}
 	else if (val->IsInt32()) {
 		//var.lVal = val->Int32Value();
-        var.lVal = val->Int32Value(isolate->GetCurrentContext()).FromMaybe(0);
+        var.lVal = val->Int32Value(ctx).FromMaybe(0);
         var.vt = VT_I4;
     }
 	else if (val->IsUint32()) {
 		//var.ulVal = val->Uint32Value();
-        var.ulVal = val->Uint32Value(isolate->GetCurrentContext()).FromMaybe(0);
+        var.ulVal = val->Uint32Value(ctx).FromMaybe(0);
 		var.vt = (var.ulVal <= 0x7FFFFFFF) ? VT_I4 : VT_UI4;
 	}
 	else if (val->IsNumber()) {
 		//var.dblVal = val->NumberValue();
-        var.dblVal = val->NumberValue(isolate->GetCurrentContext()).FromMaybe(0);
+        var.dblVal = val->NumberValue(ctx).FromMaybe(0);
         var.vt = VT_R8;
     }
 	else if (val->IsDate()) {
 		//var.date = ToOleDate(val->NumberValue());
-        var.date = ToOleDate(val->NumberValue(isolate->GetCurrentContext()).FromMaybe(0));
+        var.date = ToOleDate(val->NumberValue(ctx).FromMaybe(0));
         var.vt = VT_DATE;
     }
 	else if (val->IsBoolean()) {
-		var.boolVal = val->BooleanValue(isolate->GetCurrentContext()).FromMaybe(false) ? VARIANT_TRUE : VARIANT_FALSE;
+		var.boolVal = NODE_BOOL(isolate, val) ? VARIANT_TRUE : VARIANT_FALSE;
         var.vt = VT_BOOL;
     }
 	else if (val->IsArray() && (vt != VT_NULL)) {
@@ -253,7 +263,9 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 		var.parray = SafeArrayCreateVector(vt, 0, len);
 		for (uint32_t i = 0; i < len; i++) {
 			CComVariant v;
-			Value2Variant(isolate, arr->Get(i), v, vt);
+			Local<Value> val;
+			if (!arr->Get(ctx, i).ToLocal(&val)) val = Undefined(isolate);
+			Value2Variant(isolate, val, v, vt);
 			void *pv;
 			if (vt == VT_VARIANT) pv = (void*)&v;
 			else if (vt == VT_DISPATCH || vt == VT_UNKNOWN || vt == VT_BSTR) pv = v.byref;
@@ -271,7 +283,7 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 		}
 	}
 	else {
-		String::Value str(val);
+		String::Value str(isolate, val);
 		var.vt = VT_BSTR;
 		var.bstrVal = (str.length() > 0) ? SysAllocString((LPOLESTR)*str) : 0;
 	}
@@ -446,6 +458,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::GetIDsOfNames(REFIID riid, LPOLESTR *r
 
 HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS *pDispParams, VARIANT *pVarResult, EXCEPINFO *pExcepInfo, UINT *puArgErr) {
 	Isolate *isolate = Isolate::GetCurrent();
+	Local<Context> ctx = isolate->GetCurrentContext();
 	Local<Object> self = obj.Get(isolate);
 	Local<Value> name, val, ret;
 
@@ -454,7 +467,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 		index_t::const_iterator p = index.find(dispIdMember);
 		if (p == index.end()) return DISP_E_MEMBERNOTFOUND;
 		name_t &info = *p->second;
-		name = String::NewFromTwoByte(isolate, (uint16_t*)info.name.c_str());
+		name = v8str(isolate, info.name.c_str());
 	}
 	// Set property value
 	if ((wFlags & DISPATCH_PROPERTYPUT) != 0) {
@@ -467,7 +480,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 		// Set simple object property value
 		if (!key) {
 			if (name.IsEmpty()) return DISP_E_MEMBERNOTFOUND;
-			rcode = self->Set(name, val);
+			rcode = self->Set(ctx, name, val).FromMaybe(false);
 		}
 
 		// Set object/array item value
@@ -475,14 +488,14 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 			Local<Object> target;
 			if (name.IsEmpty()) target = self;
 			else {
-				Local<Value> obj = self->Get(name);
-				if (!obj.IsEmpty()) target = Local<Object>::Cast(obj);
+				Local<Value> obj;
+				if (self->Get(ctx, name).ToLocal(&obj) && !obj.IsEmpty()) target = Local<Object>::Cast(obj);
 				if (target.IsEmpty()) return DISP_E_BADCALLEE;
 			}
 
 			LONG index = Variant2Int<LONG>(*key, -1);
-			if (index >= 0) rcode = target->Set((uint32_t)index, val);
-			else rcode = target->Set(Variant2Value(isolate, *key, false), val);
+			if (index >= 0) rcode = target->Set(ctx, (uint32_t)index, val).FromMaybe(false);
+			else rcode = target->Set(ctx, Variant2Value(isolate, *key, false), val).FromMaybe(false);
 		}
 
 		// Store result
@@ -495,7 +508,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 
 	// Prepare property item
 	if (name.IsEmpty()) val = self;
-	else val = self->Get(name);
+	else self->Get(ctx, name).ToLocal(&val);
 
 	// Call property as method
 	if ((wFlags & DISPATCH_METHOD) != 0) {
@@ -506,7 +519,7 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 		if (val->IsFunction()) {
 			Local<Function> func = Local<Function>::Cast(val);
 			if (func.IsEmpty()) return DISP_E_BADCALLEE;
-			ret = func->Call(self, argcnt, argptr);
+			func->Call(isolate->GetCurrentContext(), self, argcnt, argptr).ToLocal(&ret);
 		}
 		else if (val->IsObject()) {
 			wFlags = DISPATCH_PROPERTYGET;
@@ -526,8 +539,8 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 			if (target.IsEmpty()) return DISP_E_BADCALLEE;
 			VARIANT &key = pDispParams->rgvarg[0];
 			LONG index = Variant2Int<LONG>(key, -1);
-			if (index >= 0) ret = target->Get((uint32_t)index);
-			else ret = target->Get(Variant2Value(isolate, key, false));
+			if (index >= 0) target->Get(ctx, (uint32_t)index).ToLocal(&ret);
+			else target->Get(ctx, Variant2Value(isolate, key, false)).ToLocal(&ret);
 		}
 		else {
 			ret = val;

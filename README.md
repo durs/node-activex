@@ -83,6 +83,8 @@ var v_short_from_cast = winax.cast(17, 'short');
 Install package throw NPM (see below **Building** for details)
 ```
 npm install winax
+npm install winax --msvs_version=2015
+npm install winax --msvs_version=2017
 ```
 
 Create ADO Connection throw global function

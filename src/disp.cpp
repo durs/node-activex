@@ -325,7 +325,7 @@ Local<Value> DispObject::getIdentity(Isolate *isolate) {
         */
         ptr = ptr->parent.lock();
     }
-    return String::NewFromTwoByte(isolate, (uint16_t*)id.c_str());
+	return v8str(isolate, id.c_str());
 }
 
 Local<Value> DispObject::getTypeInfo(Isolate *isolate) {
@@ -335,14 +335,15 @@ Local<Value> DispObject::getTypeInfo(Isolate *isolate) {
     uint32_t index = 0;
     Local<v8::Array> items(v8::Array::New(isolate));
     disp->Enumerate([isolate, this, &items, &index](ITypeInfo *info, FUNCDESC *desc) {
+		Local<Context> ctx = isolate->GetCurrentContext();
         CComBSTR name;
         this->disp->GetItemName(info, desc->memid, &name); 
         Local<Object> item(Object::New(isolate));
-        if (name) item->Set(String::NewFromUtf8(isolate, "name"), String::NewFromTwoByte(isolate, (uint16_t*)(BSTR)name));
-        item->Set(String::NewFromUtf8(isolate, "dispid"), Int32::New(isolate, desc->memid));
-        item->Set(String::NewFromUtf8(isolate, "invkind"), Int32::New(isolate, desc->invkind));
-        item->Set(String::NewFromUtf8(isolate, "argcnt"), Int32::New(isolate, desc->cParams));
-        items->Set(index++, item);
+        if (name) item->Set(ctx, v8str(isolate, "name"), v8str(isolate, (BSTR)name));
+        item->Set(ctx, v8str(isolate, "dispid"), Int32::New(isolate, desc->memid));
+        item->Set(ctx, v8str(isolate, "invkind"), Int32::New(isolate, desc->invkind));
+        item->Set(ctx, v8str(isolate, "argcnt"), Int32::New(isolate, desc->cParams));
+        items->Set(ctx, index++, item);
     });
     return items;
 }
@@ -352,10 +353,11 @@ Local<Value> DispObject::getTypeInfo(Isolate *isolate) {
 
 void DispObject::NodeInit(const Local<Object> &target) {
     Isolate *isolate = target->GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
 
     // Prepare constructor template
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
-    clazz->SetClassName(String::NewFromUtf8(isolate, "Dispatch"));
+    clazz->SetClassName(v8str(isolate, "Dispatch"));
 
 	NODE_SET_PROTOTYPE_METHOD(clazz, "toString", NodeToString);
 	NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", NodeValueOf);
@@ -365,38 +367,40 @@ void DispObject::NodeInit(const Local<Object> &target) {
     inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
     inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
     inst->SetCallAsFunctionHandler(NodeCall);
-	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__id"), NodeGet);
-	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__value"), NodeGet);
-    inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__type"), NodeGet);
+	inst->SetNativeDataProperty(v8str(isolate, "__id"), NodeGet);
+	inst->SetNativeDataProperty(v8str(isolate, "__value"), NodeGet);
+    inst->SetNativeDataProperty(v8str(isolate, "__type"), NodeGet);
 
     inst_template.Reset(isolate, inst);
 	clazz_template.Reset(isolate, clazz);
-    target->Set(String::NewFromUtf8(isolate, "Object"), clazz->GetFunction());
-	target->Set(String::NewFromUtf8(isolate, "cast"), FunctionTemplate::New(isolate, NodeCast, target)->GetFunction());
-	target->Set(String::NewFromUtf8(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease, target)->GetFunction());
+    target->Set(ctx, v8str(isolate, "Object"), clazz->GetFunction(ctx).ToLocalChecked());
+	target->Set(ctx, v8str(isolate, "cast"), FunctionTemplate::New(isolate, NodeCast, target)->GetFunction(ctx).ToLocalChecked());
+	target->Set(ctx, v8str(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease, target)->GetFunction(ctx).ToLocalChecked());
 
 #ifdef TEST_ADVISE 
-    target->Set(String::NewFromUtf8(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints, target)->GetFunction());
-    target->Set(String::NewFromUtf8(isolate, "peekAndDispatchMessages"), FunctionTemplate::New(isolate, PeakAndDispatchMessages, target)->GetFunction());
+    target->Set(ctx, v8str(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints, target)->GetFunction(ctx).ToLocalChecked());
+    target->Set(ctx, v8str(isolate, "peekAndDispatchMessages"), FunctionTemplate::New(isolate, PeakAndDispatchMessages, target)->GetFunction(ctx).ToLocalChecked());
 #endif
 
-    //Context::GetCurrent()->Global()->Set(String::NewFromUtf8("ActiveXObject"), t->GetFunction());
+    //Context::GetCurrent()->Global()->Set(v8str(isolate, "ActiveXObject"), t->GetFunction());
 	NODE_DEBUG_MSG("DispObject initialized");
 }
 
 Local<Object> DispObject::NodeCreate(Isolate *isolate, const Local<Object> &parent, const DispInfoPtr &ptr, const std::wstring &name, DISPID id, LONG index, int opt) {
     Local<Object> self;
     if (!inst_template.IsEmpty()) {
-        self = inst_template.Get(isolate)->NewInstance();
-        (new DispObject(ptr, name, id, index, opt))->Wrap(self);
-		//Local<String> prop_id(String::NewFromUtf8(isolate, "_identity"));
-		//self->Set(prop_id, String::NewFromTwoByte(isolate, (uint16_t*)name));
+		if (inst_template.Get(isolate)->NewInstance(isolate->GetCurrentContext()).ToLocal(&self)) {
+			(new DispObject(ptr, name, id, index, opt))->Wrap(self);
+			//Local<String> prop_id(v8str(isolate, "_identity"));
+			//self->Set(prop_id, v8str(isolate, name.c_str()));
+		}
 	}
     return self;
 }
 
 void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
     int argcnt = args.Length();
     if (argcnt < 1) {
         isolate->ThrowException(InvalidArgumentsError(isolate));
@@ -404,17 +408,17 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     }
     int options = (option_async | option_type);
     if (argcnt > 1) {
-        Local<Value> argopt = args[1];
+        Local<Value> val, argopt = args[1];
         if (!argopt.IsEmpty() && argopt->IsObject()) {
             auto opt = Local<Object>::Cast(argopt);
-            if (!v8val2bool(isolate, opt->Get(String::NewFromUtf8(isolate, "async")), true)) {
-                options &= ~option_async;
+			if (opt->Get(ctx, v8str(isolate, "async")).ToLocal(&val)) {
+				if (!v8val2bool(isolate, val, true)) options &= ~option_async;
             }
-            if (!v8val2bool(isolate, opt->Get(String::NewFromUtf8(isolate, "type")), true)) {
-                options &= ~option_type;
+			if (opt->Get(ctx, v8str(isolate, "type")).ToLocal(&val)) {
+				if (!v8val2bool(isolate, val, true)) options &= ~option_type;
             }
-			if (v8val2bool(isolate, opt->Get(String::NewFromUtf8(isolate, "activate")), false)) {
-				options |= option_activate;
+			if (opt->Get(ctx, v8str(isolate, "activate")).ToLocal(&val)) {
+				if (v8val2bool(isolate, val, false)) options |= option_activate;
 			}
 		}
     }
@@ -428,10 +432,14 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 		}
         const int argc = 1;
         Local<Value> argv[argc] = { args[0] };
-        Local<Context> context = isolate->GetCurrentContext();
-        Local<Function> cons = Local<Function>::New(isolate, clazz->GetFunction());
-        Local<Object> self = cons->NewInstance(context, argc, argv).ToLocalChecked();
-        args.GetReturnValue().Set(self);
+		Local<Function> cons;
+		Local<Context> context = isolate->GetCurrentContext();
+		if (clazz->GetFunction(context).ToLocal(&cons)) {
+			Local<Object> self;
+			if (cons->NewInstance(context, argc, argv).ToLocal(&self)) {
+				args.GetReturnValue().Set(self);
+			}
+		}
         return;
     }
 
@@ -442,7 +450,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	if (args[0]->IsString()) {
 
 		// Prepare arguments
-        String::Value vname(args[0]);
+        String::Value vname(isolate, args[0]);
 		if (vname.length() <= 0) hrcode = E_INVALIDARG;
 		else {
 			name.assign((LPOLESTR)*vname, vname.length());
@@ -488,12 +496,13 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 
 void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
-	String::Value vname(name);
+	String::Value vname(isolate, name);
 	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
     if (_wcsicmp(id, L"__value") == 0) {
@@ -509,15 +518,22 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
         args.GetReturnValue().Set(self->getTypeInfo(isolate));
     }
 	else if (_wcsicmp(id, L"__proto__") == 0) {
+		Local<Function> func;
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
-		if (clazz.IsEmpty()) args.GetReturnValue().SetNull();
-		else args.GetReturnValue().Set(clazz_template.Get(isolate)->GetFunction());
+		if (clazz.IsEmpty() || !clazz->GetFunction(ctx).ToLocal(&func)) args.GetReturnValue().SetNull();
+		else args.GetReturnValue().Set(func);
 	}
 	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
     else {
 		self->get(id, -1, args);
@@ -542,7 +558,7 @@ void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCal
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
-	String::Value vname(name);
+	String::Value vname(isolate, name);
 	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
 	NODE_DEBUG_FMT2("DispObject '%S.%S' set", self->name.c_str(), id);
     self->set(id, -1, value, args);
@@ -619,6 +635,7 @@ void DispObject::NodeCast(const FunctionCallbackInfo<Value>& args) {
 #ifdef TEST_ADVISE 
 void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
     Local<Array> items = Array::New(isolate);
     CComPtr<IDispatch> ptr;
     CComPtr<IConnectionPointContainer> cp_cont;
@@ -640,7 +657,7 @@ void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
         CComPtr<IConnectionPoint> cp_ptr;
         uint32_t cnt = 0;
         while (SUCCEEDED(cp_enum->Next(1, &cp_ptr, &cnt_fetched)) && cnt_fetched == 1) {
-            items->Set(cnt++, ConnectionPointObject::NodeCreateInstance(isolate, cp_ptr, ptr));
+            items->Set(ctx, cnt++, ConnectionPointObject::NodeCreateInstance(isolate, cp_ptr, ptr));
             cp_ptr.Release();
         }
     }
@@ -719,7 +736,7 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 	VARTYPE vt = VT_EMPTY;
 	if (!type.IsEmpty()) {
 		if (type->IsString()) {
-			String::Value vtstr(type);
+			String::Value vtstr(isolate, type);
 			const wchar_t *pvtstr = (const wchar_t *)*vtstr;
 			int vtstr_len = vtstr.length();
 			if (vtstr_len > 0 && *pvtstr == 'p') {
@@ -784,10 +801,11 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 
 void VariantObject::NodeInit(const Local<Object> &target) {
 	Isolate *isolate = target->GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
 
 	// Prepare constructor template
 	Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
-	clazz->SetClassName(String::NewFromUtf8(isolate, "Variant"));
+	clazz->SetClassName(v8str(isolate, "Variant"));
 
 	NODE_SET_PROTOTYPE_METHOD(clazz, "clear", NodeClear);
 	NODE_SET_PROTOTYPE_METHOD(clazz, "assign", NodeAssign);
@@ -800,13 +818,16 @@ void VariantObject::NodeInit(const Local<Object> &target) {
     inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
     inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
     //inst->SetCallAsFunctionHandler(NodeCall);
-	//inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__id"), NodeGet);
-	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__value"), NodeGet);
-	inst->SetNativeDataProperty(String::NewFromUtf8(isolate, "__type"), NodeGet);
+	//inst->SetNativeDataProperty(v8str(isolate, "__id"), NodeGet);
+	inst->SetNativeDataProperty(v8str(isolate, "__value"), NodeGet);
+	inst->SetNativeDataProperty(v8str(isolate, "__type"), NodeGet);
 
 	inst_template.Reset(isolate, inst);
 	clazz_template.Reset(isolate, clazz);
-	target->Set(String::NewFromUtf8(isolate, "Variant"), clazz->GetFunction());
+	Local<Function> func;
+	if (clazz->GetFunction(ctx).ToLocal(&func)) {
+		target->Set(ctx, v8str(isolate, "Variant"), func);
+	}
 	NODE_DEBUG_MSG("VariantObject initialized");
 }
 
@@ -814,8 +835,9 @@ Local<Object> VariantObject::NodeCreateInstance(const FunctionCallbackInfo<Value
 	Local<Object> self;
 	Isolate *isolate = args.GetIsolate();
 	if (!inst_template.IsEmpty()) {
-		self = inst_template.Get(isolate)->NewInstance();
-		(new VariantObject(args))->Wrap(self);
+		if (inst_template.Get(isolate)->NewInstance(isolate->GetCurrentContext()).ToLocal(&self)) {
+			(new VariantObject(args))->Wrap(self);
+		}
 	}
 	return self;
 }
@@ -889,12 +911,13 @@ void VariantObject::NodeToString(const FunctionCallbackInfo<Value>& args) {
 
 void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
-	String::Value vname(name);
+	String::Value vname(isolate, name);
 	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
 	if (_wcsicmp(id, L"__value") == 0) {
 		Local<Value> result = Variant2Value(isolate, self->value);
@@ -906,27 +929,43 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
 		if (self->value.vt & VT_ARRAY) type = L"array:";
         if (vtypes.find(self->value.vt & VT_TYPEMASK, name)) type += name;
 		else type += std::to_wstring(self->value.vt & VT_TYPEMASK);
-		args.GetReturnValue().Set(String::NewFromTwoByte(isolate, (uint16_t*)type.c_str()));
+		Local<String> text = v8str(isolate, type.c_str());
 	}
 	else if (_wcsicmp(id, L"__proto__") == 0) {
+		Local<Function> func;
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
-		if (clazz.IsEmpty()) args.GetReturnValue().SetNull();
-		else args.GetReturnValue().Set(clazz_template.Get(isolate)->GetFunction());
+		if (clazz.IsEmpty() || !clazz_template.Get(isolate)->GetFunction(ctx).ToLocal(&func)) args.GetReturnValue().SetNull();
+		else args.GetReturnValue().Set(func);
 	}
 	else if (_wcsicmp(id, L"clear") == 0) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeClear, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeClear, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
 	else if (_wcsicmp(id, L"assign") == 0) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeAssign, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeAssign, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
 	else if (_wcsicmp(id, L"cast") == 0) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeCast, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeCast, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
 	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
-		args.GetReturnValue().Set(FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction());
+		Local<Function> func;
+		if (FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction(ctx).ToLocal(&func)) {
+			args.GetReturnValue().Set(func);
+		}
 	}
 	else if (_wcsicmp(id, L"length") == 0) {
 		if ((self->value.vt & VT_ARRAY) != 0) {
@@ -1058,8 +1097,9 @@ bool ConnectionPointObject::InitIndex() {
 Local<Object> ConnectionPointObject::NodeCreateInstance(Isolate *isolate, IConnectionPoint *p, IDispatch* d) {
     Local<Object> self;
     if (!inst_template.IsEmpty()) {
-        self = inst_template.Get(isolate)->NewInstance();
-        (new ConnectionPointObject(p, d))->Wrap(self);
+		if (inst_template.Get(isolate)->NewInstance(isolate->GetCurrentContext()).ToLocal(&self)) {
+			(new ConnectionPointObject(p, d))->Wrap(self);
+		}
     }
     return self;
 }
@@ -1069,7 +1109,7 @@ void ConnectionPointObject::NodeInit(const Local<Object> &target) {
 
     // Prepare constructor template
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
-    clazz->SetClassName(String::NewFromUtf8(isolate, "ConnectionPoint"));
+	clazz->SetClassName(v8str(isolate, "ConnectionPoint"));
 
     NODE_SET_PROTOTYPE_METHOD(clazz, "advise", NodeAdvise);
 
@@ -1078,7 +1118,7 @@ void ConnectionPointObject::NodeInit(const Local<Object> &target) {
 
     inst_template.Reset(isolate, inst);
     clazz_template.Reset(isolate, clazz);
-    //target->Set(String::NewFromUtf8(isolate, "ConnectionPoint"), clazz->GetFunction());
+    //target->Set(v8str(isolate, "ConnectionPoint"), clazz->GetFunction());
     NODE_DEBUG_MSG("ConnectionPointObject initialized");
 }
 
