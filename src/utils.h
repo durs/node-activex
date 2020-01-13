@@ -261,6 +261,22 @@ inline Local<Value> Error(Isolate *isolate, const char *msg) {
 
 //-------------------------------------------------------------------------------------------------------
 
+class NodeObject : public ObjectWrap
+{
+public:
+	template<typename T>
+	static inline T *Unwrap(Local<Object> handle) {
+		if (handle.IsEmpty() || handle->InternalFieldCount() == 0) {
+			return NULL;
+		}
+		void *ptr = handle->GetAlignedPointerFromInternalField(0);
+		NodeObject *obj = static_cast<NodeObject*>(ptr);
+		return static_cast<T*>(obj);
+	}
+};
+
+//-------------------------------------------------------------------------------------------------------
+
 inline HRESULT DispFind(IDispatch *disp, LPOLESTR name, DISPID *dispid) {
 	LPOLESTR names[] = { name };
 	return disp->GetIDsOfNames(GUID_NULL, names, 1, 0, dispid);

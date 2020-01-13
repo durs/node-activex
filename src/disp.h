@@ -138,7 +138,7 @@ public:
 
 typedef std::shared_ptr<DispInfo> DispInfoPtr;
 
-class DispObject: public ObjectWrap
+class DispObject: public NodeObject
 {
 public:
 	DispObject(const DispInfoPtr &ptr, const std::wstring &name, DISPID id = DISPID_UNKNOWN, LONG indx = -1, int opt = 0);
@@ -210,7 +210,7 @@ private:
 };
 
 
-class VariantObject : public ObjectWrap
+class VariantObject : public NodeObject
 {
 public:
 	VariantObject() {};
@@ -255,7 +255,7 @@ private:
 
 #ifdef TEST_ADVISE 
 
-class ConnectionPointObject : public ObjectWrap
+class ConnectionPointObject : public NodeObject
 {
 public:
     ConnectionPointObject(IConnectionPoint *p, IDispatch* d);

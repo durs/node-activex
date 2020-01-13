@@ -374,12 +374,12 @@ void DispObject::NodeInit(const Local<Object> &target) {
     inst_template.Reset(isolate, inst);
 	clazz_template.Reset(isolate, clazz);
     target->Set(ctx, v8str(isolate, "Object"), clazz->GetFunction(ctx).ToLocalChecked());
-	target->Set(ctx, v8str(isolate, "cast"), FunctionTemplate::New(isolate, NodeCast, target)->GetFunction(ctx).ToLocalChecked());
-	target->Set(ctx, v8str(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease, target)->GetFunction(ctx).ToLocalChecked());
+	target->Set(ctx, v8str(isolate, "cast"), FunctionTemplate::New(isolate, NodeCast)->GetFunction(ctx).ToLocalChecked());
+	target->Set(ctx, v8str(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease)->GetFunction(ctx).ToLocalChecked());
 
 #ifdef TEST_ADVISE 
-    target->Set(ctx, v8str(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints, target)->GetFunction(ctx).ToLocalChecked());
-    target->Set(ctx, v8str(isolate, "peekAndDispatchMessages"), FunctionTemplate::New(isolate, PeakAndDispatchMessages, target)->GetFunction(ctx).ToLocalChecked());
+    target->Set(ctx, v8str(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints)->GetFunction(ctx).ToLocalChecked());
+    target->Set(ctx, v8str(isolate, "peekAndDispatchMessages"), FunctionTemplate::New(isolate, PeakAndDispatchMessages)->GetFunction(ctx).ToLocalChecked());
 #endif
 
     //Context::GetCurrent()->Global()->Set(v8str(isolate, "ActiveXObject"), t->GetFunction());
@@ -525,13 +525,13 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
 	}
 	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeValueOf)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeToString)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
@@ -939,31 +939,31 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
 	}
 	else if (_wcsicmp(id, L"clear") == 0) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeClear, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeClear)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
 	else if (_wcsicmp(id, L"assign") == 0) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeAssign, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeAssign)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
 	else if (_wcsicmp(id, L"cast") == 0) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeCast, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeCast)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
 	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeValueOf, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeValueOf)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
 	else if (_wcsicmp(id, L"toString") == 0) {
 		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeToString, args.This())->GetFunction(ctx).ToLocal(&func)) {
+		if (FunctionTemplate::New(isolate, NodeToString)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}

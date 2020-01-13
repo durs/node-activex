@@ -5,7 +5,8 @@ const assert = require('assert');
 
 var data_path = path.join(__dirname, '../data/');
 var filename = "persons.dbf";
-var constr = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + data_path + ";Extended Properties=\"DBASE IV;\"";
+var provider = "Microsoft.ACE.OLEDB.12.0";
+var constr = "Provider=" + provider + ";Data Source=" + data_path + ";Extended Properties=\"DBASE IV;\"";
 var fso, con, rs, fields, reccnt;
 
 describe("Scripting.FileSystemObject", function() {
