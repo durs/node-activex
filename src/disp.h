@@ -36,6 +36,7 @@ public:
 		inline bool is_property() const { return ((kind & INVOKE_FUNC) == 0); }
 		inline bool is_property_simple() const { return (((kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_PROPERTYGET) && (argcnt_get == 0); }
 		inline bool is_function_simple() const { return (((kind & (INVOKE_PROPERTYGET | INVOKE_FUNC))) == INVOKE_FUNC) && (argcnt_get == 0); }
+		inline bool is_property_advanced() const { return kind == (INVOKE_PROPERTYGET | INVOKE_PROPERTYPUT) && (argcnt_get == 1); }
 	};
 	typedef std::shared_ptr<type_t> type_ptr;
 	typedef std::map<DISPID, type_ptr> types_by_dispid_t;
