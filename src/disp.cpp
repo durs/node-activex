@@ -215,7 +215,15 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
         hrcode = disp->ExecuteMethod(dispid, argcnt, pargs, &ret, &except);
     }
     else {
-        hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret, &except);
+        DispInfo::type_ptr disp_info;
+		disp->GetTypeInfo(dispid, disp_info);
+
+		if(disp_info->is_property_advanced() && argcnt > 1) {
+			hrcode = disp->SetProperty(dispid, argcnt, pargs, &ret, &except);
+		}
+		else {
+			hrcode = disp->GetProperty(dispid, argcnt, pargs, &ret, &except);
+		}
     }
     if FAILED(hrcode) {
         isolate->ThrowException(DispError(isolate, hrcode, L"DispInvoke", name.c_str(), &except));
