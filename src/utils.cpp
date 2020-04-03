@@ -76,10 +76,11 @@ Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR 
 //-------------------------------------------------------------------------------------------------------
 
 Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
-	Local<Context> ctx = isolate->GetCurrentContext();
 	if ((v.vt & VT_ARRAY) == 0) return Null(isolate);
 	SAFEARRAY *varr = (v.vt & VT_BYREF) != 0 ? *v.pparray : v.parray;
-	if (!varr || varr->cDims != 1) return Null(isolate);
+	if (!varr || varr->cDims > 2 || varr->cDims == 0) return Null(isolate);
+	else if ( varr->cDims == 2 ) return Variant2Array2( isolate, v );
+	Local<Context> ctx = isolate->GetCurrentContext();
 	VARTYPE vt = v.vt & VT_TYPEMASK;
 	LONG cnt = (LONG)varr->rgsabound[0].cElements;
 	Local<Array> arr = Array::New(isolate, cnt);
@@ -92,6 +93,34 @@ Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
 		}
 	}
 	return arr;
+}
+
+static Local<Value> Variant2Array2(Isolate *isolate, const VARIANT &v) {
+	if ((v.vt & VT_ARRAY) == 0) return Null(isolate);
+	SAFEARRAY *varr = (v.vt & VT_BYREF) != 0 ? *v.pparray : v.parray;
+	if (!varr || varr->cDims != 2) return Null(isolate);
+	Local<Context> ctx = isolate->GetCurrentContext();
+	VARTYPE vt = v.vt & VT_TYPEMASK;
+	LONG cnt1 = (LONG)varr->rgsabound[0].cElements;
+	LONG cnt2 = (LONG)varr->rgsabound[1].cElements;
+	Local<Array> arr1 = Array::New(isolate, cnt2);
+	LONG rgIndices[ 2 ];
+	for (LONG i2 = varr->rgsabound[1].lLbound; i2 < varr->rgsabound[1].lLbound + cnt2; i2++) {
+		rgIndices[ 0 ] = i2;
+		Local<Array> arr2 = Array::New(isolate, cnt1);
+		for (LONG i1 = varr->rgsabound[0].lLbound; i1 < varr->rgsabound[0].lLbound + cnt1; i1++) {
+			CComVariant vi;
+			rgIndices[ 1 ] = i1;
+			if SUCCEEDED(SafeArrayGetElement(varr, &rgIndices[0], (vt == VT_VARIANT) ? (void*)&vi : (void*)&vi.byref)) {
+				if (vt != VT_VARIANT) vi.vt = vt;
+				uint32_t jsi = (uint32_t)i1 - varr->rgsabound[ 0 ].lLbound;
+				arr2->Set(ctx, jsi, Variant2Value(isolate, vi, true));
+			}
+		}
+		uint32_t jsi = i2 - varr->rgsabound[ 1 ].lLbound;
+		arr1->Set(ctx, jsi, arr2);
+	}
+	return arr1;
 }
 
 Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) {
