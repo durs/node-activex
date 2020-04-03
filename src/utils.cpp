@@ -83,11 +83,12 @@ Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v) {
 	VARTYPE vt = v.vt & VT_TYPEMASK;
 	LONG cnt = (LONG)varr->rgsabound[0].cElements;
 	Local<Array> arr = Array::New(isolate, cnt);
-	for (LONG i = varr->rgsabound[0].lLbound; i < cnt; i++) {
+	for (LONG i = varr->rgsabound[0].lLbound; i < varr->rgsabound[0].lLbound + cnt; i++) {
 		CComVariant vi;
 		if SUCCEEDED(SafeArrayGetElement(varr, &i, (vt == VT_VARIANT) ? (void*)&vi : (void*)&vi.byref)) {
 			if (vt != VT_VARIANT) vi.vt = vt;
-			arr->Set(ctx, (uint32_t)i, Variant2Value(isolate, vi, true));
+			uint32_t jsi = i - varr->rgsabound[ 0 ].lLbound;
+			arr->Set(ctx, jsi, Variant2Value(isolate, vi, true));
 		}
 	}
 	return arr;
