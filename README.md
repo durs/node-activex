@@ -160,6 +160,14 @@ To obtain and build use console commands:
 ```
 git clone git://github.com/durs/node-axtivex.git
 cd node-activex
+npm install
+```
+or debug version
+```
+npm install --debug
+```
+or using node-gyp directly
+```
 node-gyp configure
 node-gyp build
 ```

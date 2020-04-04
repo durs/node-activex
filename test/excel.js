@@ -114,6 +114,24 @@ describe("Excel with JS object", function() {
         if (wbk && com_obj) assert.equal(js_obj.func(test_func_arg, 1), wbk.Test(com_obj, 'func', 0, test_func_arg));
     });
 
+    it("range read into two dimension array", function() {
+        if (wbk) {
+            var wsh = wbk.Worksheets.Item(1);
+            wsh.Range("A1").Value = "A1";
+            wsh.Range("A2").Value = "A2";
+            wsh.Range("A3").Value = "A3";
+            wsh.Range("B1").Value = "B1";
+            wsh.Range("B2").Value = "B2";
+            wsh.Range("B3").Value = "B3";
+            const data = wsh.Range("A1:B3").Value.valueOf();
+            assert(data instanceof Array);
+            assert.equal(data.length, 3);
+            assert(data[0] instanceof Array);
+            assert.equal(data[0].length, 2);
+            assert.equal(data[0][0], "A1");
+        }
+    });
+
     it("quit", function() {
         if (wbk) wbk.Close(false);
         if (excel) excel.Quit();
