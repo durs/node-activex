@@ -343,6 +343,7 @@ inline INTTYPE Variant2Int(const VARIANT &v, const INTTYPE def) {
 }
 
 Local<Value> Variant2Array(Isolate *isolate, const VARIANT &v);
+Local<Value> Variant2Array2(Isolate *isolate, const VARIANT &v);
 Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp = false);
 Local<Value> Variant2String(Isolate *isolate, const VARIANT &v);
 void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt = VT_EMPTY);
