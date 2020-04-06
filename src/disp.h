@@ -21,6 +21,75 @@ enum options_t {
 	option_auto = (option_async | option_type)
 };
 
+inline bool TypeInfoGetName(ITypeInfo *info, DISPID dispid, BSTR *name) {
+	HRESULT hrcode = info->GetDocumentation(dispid, name, NULL, NULL, NULL);
+	if SUCCEEDED(hrcode) return true;
+	UINT cnt_ret;
+	return info->GetNames(dispid, name, 1, &cnt_ret) == S_OK && cnt_ret > 0;
+}
+
+template<typename T>
+bool TypeInfoPrepareFunc(ITypeInfo *info, UINT n, T process) {
+	FUNCDESC *desc;
+	if (info->GetFuncDesc(n, &desc) != S_OK) return false;
+	process(info, desc, nullptr);
+	info->ReleaseFuncDesc(desc);
+	return true;
+}
+
+template<typename T>
+bool TypeInfoPrepareVar(ITypeInfo *info, UINT n, T process) {
+	VARDESC *desc;
+	if (info->GetVarDesc(n, &desc) != S_OK) return false;
+	process(info, nullptr, desc);
+	info->ReleaseVarDesc(desc);
+	return true;
+}
+
+template<typename T>
+void TypeInfoPrepare(ITypeInfo *info, int mode, T process) {
+	UINT cFuncs = 0, cVars = 0;
+	TYPEATTR *pattr = NULL;
+	if (info->GetTypeAttr(&pattr) == S_OK) {
+		cFuncs = pattr->cFuncs;
+		cVars = pattr->cVars;
+		info->ReleaseTypeAttr(pattr);
+	}
+	if ((mode & 1) != 0) {
+		for (UINT n = 0; n < cFuncs; n++) {
+			TypeInfoPrepareFunc<T>(info, n, process);
+		}
+	}
+	if ((mode & 2) != 0) {
+		for (UINT n = 0; n < cVars; n++) {
+			TypeInfoPrepareVar<T>(info, n, process);
+		}
+	}
+}
+
+template<typename T>
+bool TypeInfoEnumerate(IDispatch *disp, int mode, T process) {
+	UINT i, cnt;
+	if (!disp || FAILED(disp->GetTypeInfoCount(&cnt))) cnt = 0;
+	else for (i = 0; i < cnt; i++) {
+		CComPtr<ITypeInfo> info;
+		if (disp->GetTypeInfo(i, 0, &info) != S_OK) continue;
+		TypeInfoPrepare<T>(info, mode, process);
+	}
+	return cnt > 0;
+}
+
+template<typename T>
+bool TypeInfoEnumerate(ITypeLib *type, int mode, T process) {
+	UINT i, cnt = type ? type->GetTypeInfoCount() : 0;
+	for (i = 0; i < cnt; i++) {
+		CComPtr<ITypeInfo> info;
+		if (type->GetTypeInfo(i, &info) != S_OK) continue;
+		TypeInfoPrepare<T>(info, mode, process);
+	}
+	return cnt > 0;
+}
+
 class DispInfo {
 public:
 	std::weak_ptr<DispInfo> parent;
@@ -51,13 +120,13 @@ public:
     }
 
     void Prepare(IDispatch *disp) {
-        Enumerate([this](ITypeInfo *info, FUNCDESC *desc) {
-			type_ptr &ptr = this->types_by_dispid[desc->memid];
-			if (!ptr) ptr.reset(new type_t(desc->memid, desc->invkind));
-			else ptr->kind |= desc->invkind;
-			if ((desc->invkind & INVOKE_PROPERTYGET) != 0) {
-				if (desc->cParams > ptr->argcnt_get)
-					ptr->argcnt_get = desc->cParams;
+        Enumerate(1, [this](ITypeInfo *info, FUNCDESC *func, VARDESC *var) {
+			type_ptr &ptr = this->types_by_dispid[func->memid];
+			if (!ptr) ptr.reset(new type_t(func->memid, func->invkind));
+			else ptr->kind |= func->invkind;
+			if ((func->invkind & INVOKE_PROPERTYGET) != 0) {
+				if (func->cParams > ptr->argcnt_get)
+					ptr->argcnt_get = func->cParams;
 			}
         });
         bool prepared = types_by_dispid.size() > 3; // QueryInterface, AddRef, Release
@@ -65,41 +134,8 @@ public:
 	}
 
     template<typename T>
-    bool Enumerate(T process) {
-        UINT i, cnt;
-        if (!ptr || FAILED(ptr->GetTypeInfoCount(&cnt))) cnt = 0;
-        else for (i = 0; i < cnt; i++) {
-            CComPtr<ITypeInfo> info;
-            if (ptr->GetTypeInfo(i, 0, &info) != S_OK) continue;
-            PrepareType<T>(info, process);
-        }
-        return cnt > 0;
-    }
-
-    template<typename T>
-    bool PrepareType(ITypeInfo *info, T process) {
-		UINT n = 0;
-		while (PrepareFunc<T>(info, n, process)) n++;
-		/*
-		VARDESC *vdesc;
-		if (info->GetVarDesc(dispid - 1, &vdesc) == S_OK) {
-			info->ReleaseVarDesc(vdesc);
-		}
-		*/
-		return n > 0;
-	}
-
-    template<typename T>
-	bool PrepareFunc(ITypeInfo *info, UINT n, T process) {
-		FUNCDESC *desc;
-		if (info->GetFuncDesc(n, &desc) != S_OK) return false;
-        process(info, desc);
-		info->ReleaseFuncDesc(desc);
-		return true;
-	}
-    inline bool GetItemName(ITypeInfo *info, DISPID dispid, BSTR *name) {
-        UINT cnt_ret;
-        return info->GetNames(dispid, name, 1, &cnt_ret) == S_OK && cnt_ret > 0;
+    bool Enumerate(int mode, T process) {
+		return TypeInfoEnumerate((IDispatch*)ptr, mode, process);
     }
 
 	inline bool GetTypeInfo(const DISPID dispid, type_ptr &info) {
@@ -193,7 +229,6 @@ protected:
 	HRESULT valueOf(Isolate *isolate, const Local<Object> &self, Local<Value> &value);
 	void toString(const FunctionCallbackInfo<Value> &args);
     Local<Value> getIdentity(Isolate *isolate);
-    Local<Value> getTypeInfo(Isolate *isolate);
 
 private:
 	int options;
@@ -201,6 +236,9 @@ private:
 	inline bool is_prepared() { return (options & option_prepared) != 0; }
 	inline bool is_object() { return dispid == DISPID_VALUE /*&& index < 0*/; }
 	inline bool is_owned() { return (options & option_owned) != 0; }
+
+	Persistent<Value> items, methods, vars;
+	void initTypeInfo(Isolate *isolate);
 
 	DispInfoPtr disp;
 	std::wstring name;

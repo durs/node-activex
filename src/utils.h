@@ -12,10 +12,8 @@
 #define NODE_DEBUG
 #endif
 
-#if V8_MAJOR_VERSION >= 7
-#if V8_MINOR_VERSION > 0	// node v11.13
+#if (V8_MAJOR_VERSION > 7) || (V8_MAJOR_VERSION == 7 && V8_MINOR_VERSION >= 1)
 	#define NODE_BOOL_ISOLATE
-#endif
 #endif
 
 #ifdef NODE_BOOL_ISOLATE

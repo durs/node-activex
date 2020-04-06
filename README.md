@@ -11,7 +11,7 @@
 ``` js 
 var con = new ActiveXObject("ADODB.Connection", {
 	activate: false, // Allow activate existance object instance, false by default
-	async: true, // Allow asynchronius calls, true by default (for future usage)
+	async: true, // Allow asynchronius calls, true by default (not implemented, for future usage)
 	type: true	// Allow using type information, true by default
 });
 ```
@@ -76,7 +76,9 @@ var v_short_from_cast = winax.cast(17, 'short');
  * Additional dignostic propeties:
 	- **__id** - dispatch identity, for exmplae: ADODB.Connection.@Execute.Fields
 	- **__value** - value of dispatch object, equiles valueOf()
-	- **__type** - list member names with their properties
+	- **__type** - array all member items with their properties
+	- **__methods** - list member mathods by names (ITypeInfo::GetFuncDesc)
+	- **__vars** - list member variables by names (ITypeInfo::GetVarDesc) 
 
 # Usage example
 

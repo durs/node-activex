@@ -33,6 +33,9 @@ DispObject::DispObject(const DispInfoPtr &ptr, const std::wstring &nm, DISPID id
 }
 
 DispObject::~DispObject() {
+	items.Reset();
+	methods.Reset();
+	vars.Reset();
 	NODE_DEBUG_FMT("DispObject '%S' destructor", name.c_str());
 }
 
@@ -57,7 +60,10 @@ bool DispObject::release() {
     if (!disp) return false;
     NODE_DEBUG_FMT("DispObject '%S' release", name.c_str());
     disp.reset();            
-    return true;
+	items.Reset();
+	methods.Reset();
+	vars.Reset();
+	return true;
 }
 
 bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args) {
@@ -336,24 +342,45 @@ Local<Value> DispObject::getIdentity(Isolate *isolate) {
 	return v8str(isolate, id.c_str());
 }
 
-Local<Value> DispObject::getTypeInfo(Isolate *isolate) {
+void DispObject::initTypeInfo(Isolate *isolate) {
     if ((options & option_type) == 0 || !disp) {
-        return Undefined(isolate);
+        return;
     }
     uint32_t index = 0;
-    Local<v8::Array> items(v8::Array::New(isolate));
-    disp->Enumerate([isolate, this, &items, &index](ITypeInfo *info, FUNCDESC *desc) {
+	Local<v8::Object> _items = v8::Array::New(isolate);
+	Local<v8::Object> _methods = v8::Object::New(isolate);
+	Local<v8::Object> _vars = v8::Object::New(isolate);
+	disp->Enumerate(3, [isolate, &_items, &_vars, &_methods, &index](ITypeInfo *info, FUNCDESC *func, VARDESC *var) {
 		Local<Context> ctx = isolate->GetCurrentContext();
         CComBSTR name;
-        this->disp->GetItemName(info, desc->memid, &name); 
+		MEMBERID memid = func != nullptr ? func->memid : var->memid;
+        TypeInfoGetName(info, memid, &name);
         Local<Object> item(Object::New(isolate));
-        if (name) item->Set(ctx, v8str(isolate, "name"), v8str(isolate, (BSTR)name));
-        item->Set(ctx, v8str(isolate, "dispid"), Int32::New(isolate, desc->memid));
-        item->Set(ctx, v8str(isolate, "invkind"), Int32::New(isolate, desc->invkind));
-        item->Set(ctx, v8str(isolate, "argcnt"), Int32::New(isolate, desc->cParams));
-        items->Set(ctx, index++, item);
+		Local<String> vname;
+		if (name) {
+			vname = v8str(isolate, (BSTR)name);
+			item->Set(ctx, v8str(isolate, "name"), vname);
+		}
+		item->Set(ctx, v8str(isolate, "dispid"), Int32::New(isolate, memid));
+		if (func != nullptr) {
+			item->Set(ctx, v8str(isolate, "invkind"), Int32::New(isolate, (int32_t)func->invkind));
+			item->Set(ctx, v8str(isolate, "flags"), Int32::New(isolate, (int32_t)func->wFuncFlags));
+			item->Set(ctx, v8str(isolate, "argcnt"), Int32::New(isolate, (int32_t)func->cParams));
+			_methods->Set(ctx, vname, item);
+		} else {
+			item->Set(ctx, v8str(isolate, "varkind"), Int32::New(isolate, (int32_t)var->varkind));
+			item->Set(ctx, v8str(isolate, "flags"), Int32::New(isolate, (int32_t)var->wVarFlags));
+			if (var->varkind == VAR_CONST && var->lpvarValue != nullptr) {
+				v8::Local<v8::Value> value = Variant2Value(isolate, *var->lpvarValue, false);
+				item->Set(ctx, v8str(isolate, "value"), value);
+			}
+			_vars->Set(ctx, vname, item);
+		}
+		_items->Set(ctx, index++, item);
     });
-    return items;
+	items.Reset(isolate, _items);
+	methods.Reset(isolate, _methods);
+	vars.Reset(isolate, _vars);
 }
 
 //-----------------------------------------------------------------------------------
@@ -377,7 +404,12 @@ void DispObject::NodeInit(const Local<Object> &target) {
     inst->SetCallAsFunctionHandler(NodeCall);
 	inst->SetNativeDataProperty(v8str(isolate, "__id"), NodeGet);
 	inst->SetNativeDataProperty(v8str(isolate, "__value"), NodeGet);
-    inst->SetNativeDataProperty(v8str(isolate, "__type"), NodeGet);
+	//inst->SetLazyDataProperty(v8str(isolate, "__type"), NodeGet, Local<Value>(), ReadOnly);
+	//inst->SetLazyDataProperty(v8str(isolate, "__methods"), NodeGet, Local<Value>(), ReadOnly);
+	//inst->SetLazyDataProperty(v8str(isolate, "__vars"), NodeGet, Local<Value>(), ReadOnly);
+	inst->SetNativeDataProperty(v8str(isolate, "__type"), NodeGet);
+	inst->SetNativeDataProperty(v8str(isolate, "__methods"), NodeGet);
+	inst->SetNativeDataProperty(v8str(isolate, "__vars"), NodeGet);
 
     inst_template.Reset(isolate, inst);
 	clazz_template.Reset(isolate, clazz);
@@ -522,9 +554,27 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
     else if (_wcsicmp(id, L"__id") == 0) {
 		args.GetReturnValue().Set(self->getIdentity(isolate));
 	}
-    else if (_wcsicmp(id, L"__type") == 0) {
-        args.GetReturnValue().Set(self->getTypeInfo(isolate));
-    }
+	else if (_wcsicmp(id, L"__type") == 0) {
+		if (self->items.IsEmpty()) {
+			self->initTypeInfo(isolate);
+		}
+		Local<Value> result = self->items.Get(isolate);
+		args.GetReturnValue().Set(result);
+	}
+	else if (_wcsicmp(id, L"__methods") == 0) {
+		if (self->methods.IsEmpty()) {
+			self->initTypeInfo(isolate);
+		}
+		Local<Value> result = self->methods.Get(isolate);
+		args.GetReturnValue().Set(result);
+	}
+	else if (_wcsicmp(id, L"__vars") == 0) {
+		if (self->vars.IsEmpty()) {
+			self->initTypeInfo(isolate);
+		}
+		Local<Value> result = self->vars.Get(isolate);
+		args.GetReturnValue().Set(result);
+	}
 	else if (_wcsicmp(id, L"__proto__") == 0) {
 		Local<Function> func;
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
@@ -827,7 +877,9 @@ void VariantObject::NodeInit(const Local<Object> &target) {
     inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
     //inst->SetCallAsFunctionHandler(NodeCall);
 	//inst->SetNativeDataProperty(v8str(isolate, "__id"), NodeGet);
+
 	inst->SetNativeDataProperty(v8str(isolate, "__value"), NodeGet);
+	//inst->SetLazyDataProperty(v8str(isolate, "__type"), NodeGet, Local<Value>(), ReadOnly);
 	inst->SetNativeDataProperty(v8str(isolate, "__type"), NodeGet);
 
 	inst_template.Reset(isolate, inst);
