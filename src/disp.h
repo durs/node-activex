@@ -50,28 +50,30 @@ template<typename T>
 void TypeInfoPrepare(ITypeInfo *info, int mode, T process) {
 	UINT cFuncs = 0, cVars = 0;
 	TYPEATTR *pattr = NULL;
-	CComPtr<ITypeLib> typelib;
-	UINT typeindex = 0;
-	ITypeInfo *ppTinfo;
 
-	if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
-		typelib->GetTypeInfo(typeindex, &ppTinfo);
-		if (ppTinfo->GetTypeAttr(&pattr) == S_OK) {
+	// CComPtr<ITypeLib> typelib;
+	// UINT typeindex = 0;
+	// ITypeInfo *ppTinfo;
+	// if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
+	//	typelib->GetTypeInfo(typeindex, &ppTinfo);
+
+		if (info->GetTypeAttr(&pattr) == S_OK) {
 			cFuncs = (pattr->cFuncs);
 			cVars = pattr->cVars;
-			ppTinfo->ReleaseTypeAttr(pattr);
+			info->ReleaseTypeAttr(pattr);
 		}
 		if ((mode & 1) != 0) {
 			for (UINT n = 0; n < cFuncs; n++) {
-				TypeInfoPrepareFunc<T>(ppTinfo, n, process);
+				TypeInfoPrepareFunc<T>(info, n, process);
 			}
 		}
 		if ((mode & 2) != 0) {
 			for (UINT n = 0; n < cVars; n++) {
-				TypeInfoPrepareVar<T>(ppTinfo, n, process);
+				TypeInfoPrepareVar<T>(info, n, process);
 			}
 		}
-	}
+
+	// }
 }
 
 template<typename T>
