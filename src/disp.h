@@ -50,51 +50,67 @@ template<typename T>
 void TypeInfoPrepare(ITypeInfo *info, int mode, T process) {
 	UINT cFuncs = 0, cVars = 0;
 	TYPEATTR *pattr = NULL;
-
-	// CComPtr<ITypeLib> typelib;
-	// UINT typeindex = 0;
-	// ITypeInfo *ppTinfo;
-	// if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
-	//	typelib->GetTypeInfo(typeindex, &ppTinfo);
-
-		if (info->GetTypeAttr(&pattr) == S_OK) {
-			cFuncs = (pattr->cFuncs);
-			cVars = pattr->cVars;
-			info->ReleaseTypeAttr(pattr);
+	if (info->GetTypeAttr(&pattr) == S_OK) {
+		cFuncs = pattr->cFuncs;
+		cVars = pattr->cVars;
+		info->ReleaseTypeAttr(pattr);
+	}
+	if ((mode & 1) != 0) {
+		for (UINT n = 0; n < cFuncs; n++) {
+			TypeInfoPrepareFunc<T>(info, n, process);
 		}
-		if ((mode & 1) != 0) {
-			for (UINT n = 0; n < cFuncs; n++) {
-				TypeInfoPrepareFunc<T>(info, n, process);
-			}
+	}
+	if ((mode & 2) != 0) {
+		for (UINT n = 0; n < cVars; n++) {
+			TypeInfoPrepareVar<T>(info, n, process);
 		}
-		if ((mode & 2) != 0) {
-			for (UINT n = 0; n < cVars; n++) {
-				TypeInfoPrepareVar<T>(info, n, process);
-			}
-		}
-
-	// }
+	}
 }
 
 template<typename T>
-bool TypeInfoEnumerate(IDispatch *disp, int mode, T process) {
-	UINT i, cnt;
-	if (!disp || FAILED(disp->GetTypeInfoCount(&cnt))) cnt = 0;
-	else for (i = 0; i < cnt; i++) {
+bool TypeLibEnumerate(ITypeLib *typelib, int mode, T process) {
+	UINT i, cnt = typelib ? typelib->GetTypeInfoCount() : 0;
+	for (i = 0; i < cnt; i++) {
 		CComPtr<ITypeInfo> info;
-		if (disp->GetTypeInfo(i, 0, &info) != S_OK) continue;
+		if (typelib->GetTypeInfo(i, &info) != S_OK) continue;
 		TypeInfoPrepare<T>(info, mode, process);
 	}
 	return cnt > 0;
 }
 
 template<typename T>
-bool TypeInfoEnumerate(ITypeLib *type, int mode, T process) {
-	UINT i, cnt = type ? type->GetTypeInfoCount() : 0;
-	for (i = 0; i < cnt; i++) {
+bool TypeInfoEnumerate(IDispatch *disp, int mode, T process) {
+	UINT i, cnt;
+	CComPtr<ITypeLib> prevtypelib;
+	if (!disp || FAILED(disp->GetTypeInfoCount(&cnt))) cnt = 0;
+	else for (i = 0; i < cnt; i++) {
 		CComPtr<ITypeInfo> info;
-		if (type->GetTypeInfo(i, &info) != S_OK) continue;
-		TypeInfoPrepare<T>(info, mode, process);
+		if (disp->GetTypeInfo(i, 0, &info) != S_OK) continue;
+
+		// Query type library
+		UINT typeindex;
+		CComPtr<ITypeLib> typelib;
+		if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
+
+			// Enumerate all types in library types
+			// May be very slow! need a special method
+			/*
+			if (typelib != prevtypelib) {
+				TypeLibEnumerate<T>(typelib, mode, process);
+				prevtypelib.Attach(typelib.Detach());
+			}
+			*/
+
+			CComPtr<ITypeInfo> tinfo;
+			if (typelib->GetTypeInfo(typeindex, &tinfo) == S_OK) {
+				TypeInfoPrepare<T>(tinfo, mode, process);
+			}			
+		}
+
+		// Process types
+		else {
+			TypeInfoPrepare<T>(info, mode, process);
+		}
 	}
 	return cnt > 0;
 }
