@@ -37,7 +37,7 @@
     "test": "mocha test"
   },
   "license": "MIT",
-  "main": "./lib/activex",
+  "main": "index.js",
   "os": [
     "win32"
   ]
