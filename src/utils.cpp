@@ -290,17 +290,64 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 		uint32_t len = arr->Length();
 		if (vt == VT_EMPTY) vt = VT_VARIANT;
 		var.vt = VT_ARRAY | vt;
-		var.parray = SafeArrayCreateVector(vt, 0, len);
-		for (uint32_t i = 0; i < len; i++) {
-			CComVariant v;
-			Local<Value> val;
-			if (!arr->Get(ctx, i).ToLocal(&val)) val = Undefined(isolate);
-			Value2Variant(isolate, val, v, vt);
-			void *pv;
-			if (vt == VT_VARIANT) pv = (void*)&v;
-			else if (vt == VT_DISPATCH || vt == VT_UNKNOWN || vt == VT_BSTR) pv = v.byref;
-			else pv = (void*)&v.byref;
-			SafeArrayPutElement(var.parray, (LONG*)&i, pv);
+		// if array of arrays, create a 2 dim array, choose the 2nd bound
+		uint32_t second_len = 0;
+		if (len) {
+			Local<Value> first_value;
+			if (arr->Get(ctx, 0).ToLocal(&first_value)) {
+				if (first_value->IsArray()) second_len = v8::Local<Array>::Cast(first_value)->Length();
+			}
+		}
+		if ( second_len == 0 ) {
+			var.parray = SafeArrayCreateVector(vt, 0, len);
+			for (uint32_t i = 0; i < len; i++) {
+				CComVariant v;
+				Local<Value> val;
+				if (!arr->Get(ctx, i).ToLocal(&val)) val = Undefined(isolate);
+				Value2Variant(isolate, val, v, vt);
+				void *pv;
+				if (vt == VT_VARIANT) pv = (void*)&v;
+				else if (vt == VT_DISPATCH || vt == VT_UNKNOWN || vt == VT_BSTR) pv = v.byref;
+				else pv = (void*)&v.byref;
+				SafeArrayPutElement(var.parray, (LONG*)&i, pv);
+			}
+		}
+		else {
+			SAFEARRAYBOUND rgsabounds[ 2 ];
+			rgsabounds[ 0 ].lLbound = rgsabounds[ 1 ].lLbound = 0;
+			rgsabounds[ 0 ].cElements = len;
+			rgsabounds[ 1 ].cElements = second_len;
+			var.parray = SafeArrayCreate(vt, 2, rgsabounds);
+			LONG rgIndices[ 2 ];
+			for (uint32_t i = 0; i < len; i++) {
+				rgIndices[ 0 ] = i;
+				Local<Value> maybearray;
+				Local<Array> arr2;
+				bool bGotArray = false;
+				if (arr->Get( ctx, i ).ToLocal( &maybearray ) && maybearray->IsArray()) {
+					bGotArray = true;
+					arr2 = v8::Local<Array>::Cast(maybearray);
+				}
+				for (uint32_t j = 0; j < second_len; j++) {
+					rgIndices[ 1 ] = j;
+					Local<Value> val;
+					if ( bGotArray ) {
+						if (!arr2->Get(ctx, j).ToLocal(&val)) val = Undefined(isolate);
+					}
+					else {
+						// if no arrays for a "row", the value is put only in first "col"
+						if ( j == 0 ) val = maybearray;
+						else val = Undefined(isolate);
+					}
+					CComVariant v;
+					Value2Variant(isolate, val, v, vt);
+					void *pv;
+					if (vt == VT_VARIANT) pv = (void*)&v;
+					else if (vt == VT_DISPATCH || vt == VT_UNKNOWN || vt == VT_BSTR) pv = v.byref;
+					else pv = (void*)&v.byref;
+					SafeArrayPutElement(var.parray, rgIndices, pv);
+				}
+			}
 		}
 		vt = VT_EMPTY;
 	}
