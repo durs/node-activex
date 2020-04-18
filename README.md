@@ -145,7 +145,7 @@ Release COM objects (but other temporary objects may be keep references too)
 ``` js
 winax.release(con, rs, fields)
 ```
-Working with Excel ranges using two dimension arrays (from 1.0.18 version)
+Working with Excel ranges using two dimension arrays (from 1.18.0 version)
 * The second dimension is only deduced from the first array.
 * If data is missing at the time of SafeArrayPutElement, VT_EMPTY is used.
 * Best way to explicitly pass VT_EMPTY is to use null
