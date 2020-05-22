@@ -140,6 +140,10 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 	case VT_UI4:
 	case VT_UINT:
 		return Uint32::New(isolate, by_ref ? *v.pulVal : v.ulVal);
+	case VT_I8:
+		return Number::New(isolate, (double)(by_ref ? *v.pllVal : v.llVal));
+	case VT_UI8:
+		return Number::New(isolate, (double)(by_ref ? *v.pullVal : v.ullVal));
 	case VT_CY:
 		return Number::New(isolate, (double)(by_ref ? v.pcyVal : &v.cyVal)->int64 / 10000.);
 	case VT_R4:
@@ -213,7 +217,11 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 		sprintf_s(buf, "%u", (unsigned int)(by_ref ? *v.pulVal : v.ulVal));
 		break;
 	case VT_CY:
-		sprintf_s(buf, "%03f", (double)(by_ref ? v.pcyVal : &v.cyVal)->int64 / 10000.);
+	case VT_I8:
+		sprintf_s(buf, "%lld", (by_ref ? *v.pllVal : v.llVal));
+		break;
+	case VT_UI8:
+		sprintf_s(buf, "%llu", (by_ref ? *v.pullVal : v.ullVal));
 		break;
 	case VT_R4:
 		sprintf_s(buf, "%f", (double)(by_ref ? *v.pfltVal : v.fltVal));
