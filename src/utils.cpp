@@ -131,15 +131,21 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 	case VT_NULL:
 		return Null(isolate);
 	case VT_I1:
+		return Int32::New(isolate, (int32_t)(by_ref ? *v.pcVal : v.cVal));
 	case VT_I2:
+		return Int32::New(isolate, (int32_t)(by_ref ? *v.piVal : v.iVal));
 	case VT_I4:
+		return Int32::New(isolate, (int32_t)(by_ref ? *v.plVal : v.lVal));
 	case VT_INT:
-		return Int32::New(isolate, by_ref ? *v.plVal : v.lVal);
+		return Int32::New(isolate, (int32_t)(by_ref ? *v.pintVal : v.intVal));
 	case VT_UI1:
+		return Int32::New(isolate, (uint32_t)(by_ref ? *v.pbVal : v.bVal));
 	case VT_UI2:
+		return Int32::New(isolate, (uint32_t)(by_ref ? *v.puiVal : v.uiVal));
 	case VT_UI4:
+		return Int32::New(isolate, (uint32_t)(by_ref ? *v.pulVal : v.ulVal));
 	case VT_UINT:
-		return Uint32::New(isolate, by_ref ? *v.pulVal : v.ulVal);
+		return Int32::New(isolate, (uint32_t)(by_ref ? *v.puintVal : v.uintVal));
 	case VT_I8:
 		return Number::New(isolate, (double)(by_ref ? *v.pllVal : v.llVal));
 	case VT_UI8:
@@ -205,16 +211,28 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 		strcpy(buf, "NULL");
 		break;
 	case VT_I1:
+		sprintf_s(buf, "%i", (int)(by_ref ? *v.pcVal : v.cVal));
+		break;
 	case VT_I2:
+		sprintf_s(buf, "%i", (int)(by_ref ? *v.piVal : v.iVal));
+		break;
 	case VT_I4:
-	case VT_INT:
 		sprintf_s(buf, "%i", (int)(by_ref ? *v.plVal : v.lVal));
 		break;
+	case VT_INT:
+		sprintf_s(buf, "%i", (int)(by_ref ? *v.pintVal : v.intVal));
+		break;
 	case VT_UI1:
+		sprintf_s(buf, "%u", (unsigned int)(by_ref ? *v.pbVal : v.bVal));
+		break;
 	case VT_UI2:
+		sprintf_s(buf, "%u", (unsigned int)(by_ref ? *v.puiVal : v.uiVal));
+		break;
 	case VT_UI4:
-	case VT_UINT:
 		sprintf_s(buf, "%u", (unsigned int)(by_ref ? *v.pulVal : v.ulVal));
+		break;
+	case VT_UINT:
+		sprintf_s(buf, "%u", (unsigned int)(by_ref ? *v.puintVal : v.uintVal));
 		break;
 	case VT_CY:
 	case VT_I8:
