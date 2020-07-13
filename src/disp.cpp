@@ -13,10 +13,8 @@ Persistent<FunctionTemplate> DispObject::clazz_template;
 Persistent<ObjectTemplate> VariantObject::inst_template;
 Persistent<FunctionTemplate> VariantObject::clazz_template;
 
-#ifdef TEST_ADVISE 
 Persistent<ObjectTemplate> ConnectionPointObject::inst_template;
 Persistent<FunctionTemplate> ConnectionPointObject::clazz_template;
-#endif
 
 //-------------------------------------------------------------------------------------------------------
 // DispObject implemetation
@@ -386,9 +384,7 @@ void DispObject::initTypeInfo(Isolate *isolate) {
 //-----------------------------------------------------------------------------------
 // Static Node JS callbacks
 
-void DispObject::NodeInit(const Local<Object> &target) {
-    Isolate *isolate = target->GetIsolate();
-	Local<Context> ctx = isolate->GetCurrentContext();
+void DispObject::NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx) {
 
     // Prepare constructor template
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
@@ -417,10 +413,8 @@ void DispObject::NodeInit(const Local<Object> &target) {
 	target->Set(ctx, v8str(isolate, "cast"), FunctionTemplate::New(isolate, NodeCast)->GetFunction(ctx).ToLocalChecked());
 	target->Set(ctx, v8str(isolate, "release"), FunctionTemplate::New(isolate, NodeRelease)->GetFunction(ctx).ToLocalChecked());
 
-#ifdef TEST_ADVISE 
     target->Set(ctx, v8str(isolate, "getConnectionPoints"), FunctionTemplate::New(isolate, NodeConnectionPoints)->GetFunction(ctx).ToLocalChecked());
     target->Set(ctx, v8str(isolate, "peekAndDispatchMessages"), FunctionTemplate::New(isolate, PeakAndDispatchMessages)->GetFunction(ctx).ToLocalChecked());
-#endif
 
     //Context::GetCurrent()->Global()->Set(v8str(isolate, "ActiveXObject"), t->GetFunction());
 	NODE_DEBUG_MSG("DispObject initialized");
@@ -703,7 +697,6 @@ void DispObject::NodeCast(const FunctionCallbackInfo<Value>& args) {
 	args.GetReturnValue().Set(inst);
 }
 
-#ifdef TEST_ADVISE 
 void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
 	Local<Context> ctx = isolate->GetCurrentContext();
@@ -742,7 +735,6 @@ void DispObject::PeakAndDispatchMessages(const FunctionCallbackInfo<Value>& args
         DispatchMessage(&msg);
     }
 }
-#endif
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -870,9 +862,7 @@ VariantObject::VariantObject(const FunctionCallbackInfo<Value> &args) {
 	assign(args.GetIsolate(), val, type);
 }
 
-void VariantObject::NodeInit(const Local<Object> &target) {
-	Isolate *isolate = target->GetIsolate();
-	Local<Context> ctx = isolate->GetCurrentContext();
+void VariantObject::NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx) {
 
 	// Prepare constructor template
 	Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
@@ -1088,7 +1078,6 @@ void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const Pro
 }
 
 //-------------------------------------------------------------------------------------------------------
-#ifdef TEST_ADVISE 
 
 ConnectionPointObject::ConnectionPointObject(IConnectionPoint *p, IDispatch *d)
   : ptr(p), disp(d) {
@@ -1177,8 +1166,7 @@ Local<Object> ConnectionPointObject::NodeCreateInstance(Isolate *isolate, IConne
     return self;
 }
 
-void ConnectionPointObject::NodeInit(const Local<Object> &target) {
-    Isolate *isolate = target->GetIsolate();
+void ConnectionPointObject::NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx) {
 
     // Prepare constructor template
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
@@ -1238,5 +1226,4 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
     args.GetReturnValue().Set(v8::Integer::New(isolate, (uint32_t)dwCookie));
 }
 
-#endif
 //-------------------------------------------------------------------------------------------------------

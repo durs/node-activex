@@ -9,18 +9,32 @@
 
 //----------------------------------------------------------------------------------
 
-namespace node_activex {
+// Initialize this addon
+NODE_MODULE_INIT(/*exports, module, context*/) {
+  Isolate* isolate = context->GetIsolate();
 
-    void Init(Local<Object> exports) {
-        DispObject::NodeInit(exports);
-		VariantObject::NodeInit(exports);
+  DispObject::NodeInit(exports, isolate, context);
+  VariantObject::NodeInit(exports, isolate, context);
+  ConnectionPointObject::NodeInit(exports, isolate, context);
 
-#ifdef TEST_ADVISE 
-        ConnectionPointObject::NodeInit(exports);
-#endif
-    }
+  /* Example implementation of a context-aware addon:
+  // Create a new instance of `AddonData` for this instance of the addon and
+  // tie its life cycle to that of the Node.js environment.
+  AddonData* data = new AddonData(isolate);
 
-    NODE_MODULE(node_activex, Init)
+  // Wrap the data in a `v8::External` so we can pass it to the method we
+  // expose.
+  Local<External> external = External::New(isolate, data);
+
+  // Expose the method `Method` to JavaScript, and make sure it receives the
+  // per-addon-instance data we created above by passing `external` as the
+  // third parameter to the `FunctionTemplate` constructor.
+  exports->Set(context,
+               String::NewFromUtf8(isolate, "method", NewStringType::kNormal)
+                  .ToLocalChecked(),
+               FunctionTemplate::New(isolate, Method, external)
+                  ->GetFunction(context).ToLocalChecked()).FromJust();
+  */
 }
 
 //----------------------------------------------------------------------------------

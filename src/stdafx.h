@@ -1,7 +1,5 @@
 #pragma once
 
-#define TEST_ADVISE
-
 #include <SDKDDKVer.h>
 
 // Windows Header Files:

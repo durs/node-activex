@@ -208,7 +208,7 @@ public:
 
 	static Persistent<ObjectTemplate> inst_template;
 	static Persistent<FunctionTemplate> clazz_template;
-	static void NodeInit(const Local<Object> &target);
+	static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
 	static bool HasInstance(Isolate *isolate, const Local<Value> &obj) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		return !clazz.IsEmpty() && clazz->HasInstance(obj);
@@ -239,10 +239,8 @@ private:
 	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
 
-#ifdef TEST_ADVISE 
     static void NodeConnectionPoints(const FunctionCallbackInfo<Value> &args);
     static void PeakAndDispatchMessages(const FunctionCallbackInfo<Value> &args);
-#endif
 
 protected:
 	bool release();
@@ -283,7 +281,7 @@ public:
 
 	static Persistent<ObjectTemplate> inst_template;
 	static Persistent<FunctionTemplate> clazz_template;
-	static void NodeInit(const Local<Object> &target);
+	static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
 	static bool HasInstance(Isolate *isolate, const Local<Value> &obj) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		return !clazz.IsEmpty() && clazz->HasInstance(obj);
@@ -317,8 +315,6 @@ private:
 	bool assign(Isolate *isolate, Local<Value> &val, Local<Value> &type);
 };
 
-#ifdef TEST_ADVISE 
-
 class ConnectionPointObject : public NodeObject
 {
 public:
@@ -327,7 +323,7 @@ public:
     static Persistent<ObjectTemplate> inst_template;
     static Persistent<FunctionTemplate> clazz_template;
     static Local<Object> NodeCreateInstance(Isolate *isolate, IConnectionPoint *p, IDispatch* d);
-    static void NodeInit(const Local<Object> &target);
+    static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
     static void NodeCreate(const FunctionCallbackInfo<Value> &args);
     static void NodeAdvise(const FunctionCallbackInfo<Value> &args);
 
@@ -338,5 +334,3 @@ private:
     CComPtr<IDispatch> disp;
     DispObjectImpl::index_t index;
 };
-
-#endif
