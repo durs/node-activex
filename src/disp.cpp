@@ -510,6 +510,19 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 		}
 	}
 
+	// Use supplied dispatch pointer
+	else if (args[0]->IsUint8Array()) {
+		Local<Uint8Array> input = args[0].As<Uint8Array>();
+		if (input->Length() != sizeof(INT_PTR)) {
+			isolate->ThrowException(InvalidArgumentsError(isolate));
+			return;
+		}
+		void *data = input->Buffer()->GetContents().Data();
+		IDispatch* p = (IDispatch *) *(static_cast<INT_PTR*>(data));
+		disp = CComPtr<IDispatch>(p);
+		hrcode = S_OK;
+	}
+
 	// Create dispatch object from javascript object
 	else if (args[0]->IsObject()) {
 		name = L"#";
