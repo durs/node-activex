@@ -1224,6 +1224,7 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
         isolate->ThrowException(DispError(isolate, hrcode));
         return;
     }
+    self->cookies.insert(dwCookie);
     args.GetReturnValue().Set(v8::Integer::New(isolate, (uint32_t)dwCookie));
 }
 
@@ -1241,10 +1242,11 @@ void ConnectionPointObject::NodeUnadvise(const FunctionCallbackInfo<Value> &args
         return;
     }
     DWORD dwCookie = (args[0]->Uint32Value(ctx)).FromMaybe(0);
-    if (dwCookie == 0) {
+    if (dwCookie == 0 || self->cookies.find(dwCookie) == self->cookies.end()) {
         isolate->ThrowException(InvalidArgumentsError(isolate));
         return;
     }
+	self->cookies.erase(dwCookie);
     HRESULT hrcode = self->ptr->Unadvise(dwCookie);
     if FAILED(hrcode) {
         isolate->ThrowException(DispError(isolate, hrcode));

@@ -334,4 +334,4 @@ private:
     CComPtr<IConnectionPoint> ptr;
     CComPtr<IDispatch> disp;
     DispObjectImpl::index_t index;
-};
+};    std::unordered_set<DWORD> cookies;
