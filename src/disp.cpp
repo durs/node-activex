@@ -1173,6 +1173,7 @@ void ConnectionPointObject::NodeInit(const Local<Object> &target, Isolate* isola
 	clazz->SetClassName(v8str(isolate, "ConnectionPoint"));
 
     NODE_SET_PROTOTYPE_METHOD(clazz, "advise", NodeAdvise);
+    NODE_SET_PROTOTYPE_METHOD(clazz, "unadvise", NodeUnadvise);
 
     Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
@@ -1224,6 +1225,31 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
         return;
     }
     args.GetReturnValue().Set(v8::Integer::New(isolate, (uint32_t)dwCookie));
+}
+
+void ConnectionPointObject::NodeUnadvise(const FunctionCallbackInfo<Value> &args) {
+    Isolate *isolate = args.GetIsolate();
+    Local<Context> ctx = isolate->GetCurrentContext();
+    ConnectionPointObject *self = ConnectionPointObject::Unwrap<ConnectionPointObject>(args.This());
+    if (!self || !self->ptr) {
+        isolate->ThrowException(DispErrorInvalid(isolate));
+        return;
+    }
+
+    if (!args[0]->IsUint32()) {
+        isolate->ThrowException(InvalidArgumentsError(isolate));
+        return;
+    }
+    DWORD dwCookie = (args[0]->Uint32Value(ctx)).FromMaybe(0);
+    if (dwCookie == 0) {
+        isolate->ThrowException(InvalidArgumentsError(isolate));
+        return;
+    }
+    HRESULT hrcode = self->ptr->Unadvise(dwCookie);
+    if FAILED(hrcode) {
+        isolate->ThrowException(DispError(isolate, hrcode));
+        return;
+    }
 }
 
 //-------------------------------------------------------------------------------------------------------

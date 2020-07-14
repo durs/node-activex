@@ -326,6 +326,7 @@ public:
     static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
     static void NodeCreate(const FunctionCallbackInfo<Value> &args);
     static void NodeAdvise(const FunctionCallbackInfo<Value> &args);
+    static void NodeUnadvise(const FunctionCallbackInfo<Value> &args);
 
 private:
     bool InitIndex();
