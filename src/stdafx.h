@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_set>
 #include <memory>
 #include <initializer_list>
 
