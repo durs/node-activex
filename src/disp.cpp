@@ -76,9 +76,11 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
     HRESULT hrcode;
     DISPID propid;
 	bool prop_by_key = false;
+    bool this_prop = false;
     if (!tag || !*tag) {
         tag = (LPOLESTR)name.c_str();
         propid = dispid;
+        this_prop = true;
     }
 	else {
         hrcode = disp->FindProperty(tag, &propid);
@@ -109,6 +111,22 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 				if (disp_info->is_property()) opt |= option_property;
 				is_property_simple = disp_info->is_property_simple();
 			}
+		}
+		else {
+			// We were unable to figure out if it is a property or method.
+			// This is typical for .NET objects. So we may check if it is actually
+			// a .NET object by checking presense of IReflect interface and then asking
+			CComPtr<IDispatch> preflect;
+			HRESULT hr = disp->ptr->QueryInterface(IID_IReflect, (void**)&preflect);
+			DISPID lenprop;
+
+			if (SUCCEEDED(hr) && this_prop && SUCCEEDED(disp->FindProperty(L"length", &lenprop)) )
+			{
+
+				// If we have 'IReflect' and '.length' - assume it is .NET JS Array or JS Object
+				is_property_simple = true;
+			}
+
 		}
 	}
 
@@ -246,7 +264,7 @@ void DispObject::call(Isolate *isolate, const FunctionCallbackInfo<Value> &args)
 		result = DispObject::NodeCreate(isolate, args.This(), disp_result, tag);
 	}
 	else {
-		result = Variant2Value(isolate, ret);
+		result = Variant2Value(isolate, ret, true);
 	}
     args.GetReturnValue().Set(result);
 }
@@ -284,6 +302,7 @@ HRESULT DispObject::valueOf(Isolate *isolate, const Local<Object> &self, Local<V
 		CComVariant val;
 
 		// simple function without arguments
+
 		if ((options & option_function_simple) != 0) {
 			hrcode = disp->ExecuteMethod(dispid, 0, 0, &val);
 		}
@@ -291,6 +310,10 @@ HRESULT DispObject::valueOf(Isolate *isolate, const Local<Object> &self, Local<V
 		// self value, property or array element
 		else {
 			hrcode = disp->GetProperty(dispid, index, &val);
+			// Try to get some primitive value
+			if FAILED(hrcode) {
+				hrcode = disp->ExecuteMethod(dispid, 0, 0, &val);
+			}
 		}
 
 		// convert result to v8 value
@@ -601,7 +624,31 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
 		}
 	}
     else {
-		self->get(id, -1, args);
+		if (!self->get(id, -1, args))
+		{
+			Local<Value> result;
+			HRESULT hrcode = self->valueOf(isolate, args.This(), result);
+			if FAILED(hrcode) isolate->ThrowException(Win32Error(isolate, hrcode, L"Unable to Get Value"));
+
+			Local<Object> obj = result->ToObject(ctx).ToLocalChecked();
+			MaybeLocal<Value> realProp = obj->GetRealNamedPropertyInPrototypeChain(ctx, v8str(isolate, id));
+			if (realProp.IsEmpty())
+			{
+				// We may call non-existing property for an object to check its existence
+				// So we should return undefined in this case
+				args.GetReturnValue().SetUndefined();
+			}
+			else {
+				Local<Value> ownProp = realProp.ToLocalChecked();
+				if (ownProp->IsFunction())
+				{
+					Local<Function> func = Local<Function>::Cast(ownProp);
+					if (func.IsEmpty()) return;
+					args.GetReturnValue().Set(func);
+					return;
+				}
+			}
+		}
 	}
 }
 
@@ -1018,13 +1065,13 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
 			args.GetReturnValue().Set(func);
 		}
 	}
-	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
+	else if (_wcsicmp(id, L"valueOf") == 0 ) {
 		Local<Function> func;
 		if (FunctionTemplate::New(isolate, NodeValueOf)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
 		}
 	}
-	else if (_wcsicmp(id, L"toString") == 0) {
+	else if (_wcsicmp(id, L"toString") == 0 || !*id) {
 		Local<Function> func;
 		if (FunctionTemplate::New(isolate, NodeToString)->GetFunction(ctx).ToLocal(&func)) {
 			args.GetReturnValue().Set(func);
@@ -1076,6 +1123,17 @@ void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const Pro
 	}
 	isolate->ThrowException(DispError(isolate, E_NOTIMPL));
 }
+
+Local<Object> VariantObject::NodeCreate(Isolate* isolate, const VARIANT& var) {
+	Local<Object> self;
+	if (!inst_template.IsEmpty()) {
+		if (inst_template.Get(isolate)->NewInstance(isolate->GetCurrentContext()).ToLocal(&self)) {
+			(new VariantObject(var))->Wrap(self);
+		}
+	}
+	return self;
+}
+
 
 //-------------------------------------------------------------------------------------------------------
 
@@ -1173,7 +1231,8 @@ void ConnectionPointObject::NodeInit(const Local<Object> &target, Isolate* isola
 	clazz->SetClassName(v8str(isolate, "ConnectionPoint"));
 
     NODE_SET_PROTOTYPE_METHOD(clazz, "advise", NodeAdvise);
-    NODE_SET_PROTOTYPE_METHOD(clazz, "unadvise", NodeUnadvise);
+	NODE_SET_PROTOTYPE_METHOD(clazz, "unadvise", NodeUnadvise);
+	NODE_SET_PROTOTYPE_METHOD(clazz, "getMethods", NodeConnectionPointMethods);
 
     Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
@@ -1205,7 +1264,14 @@ void ConnectionPointObject::NodeAdvise(const FunctionCallbackInfo<Value> &args) 
         if (!Value2Unknown(isolate, val, &unk)) {
             Local<Object> obj;
             if (!val.IsEmpty() && val->IsObject() && val->ToObject(isolate->GetCurrentContext()).ToLocal(&obj)) {
-                DispObjectImpl *impl = new DispObjectImpl(obj, false);
+
+                // .NET Connection Points require to implement specific interface
+                // So we need to remember its IID for the case when Container does QueryInterface for it
+                IID connif;
+                self->ptr->GetConnectionInterface(&connif);
+                DispObjectImpl *impl = new DispObjectImpl(obj, false, connif);
+                // It requires reversed arguments
+                impl->reverse_arguments = true;
                 impl->index = self->index;
                 if (self->index.size()) {
                     impl->dispid_next = self->index.rbegin()->first + 1;
@@ -1237,14 +1303,14 @@ void ConnectionPointObject::NodeUnadvise(const FunctionCallbackInfo<Value> &args
         return;
     }
 
-    if (!args[0]->IsUint32()) {
+    if (args.Length()==0 || !args[0]->IsUint32()) {
         isolate->ThrowException(InvalidArgumentsError(isolate));
         return;
     }
     DWORD dwCookie = (args[0]->Uint32Value(ctx)).FromMaybe(0);
     if (dwCookie == 0 || self->cookies.find(dwCookie) == self->cookies.end()) {
         isolate->ThrowException(InvalidArgumentsError(isolate));
-        return;
+    return;
     }
 	self->cookies.erase(dwCookie);
     HRESULT hrcode = self->ptr->Unadvise(dwCookie);
@@ -1252,6 +1318,24 @@ void ConnectionPointObject::NodeUnadvise(const FunctionCallbackInfo<Value> &args
         isolate->ThrowException(DispError(isolate, hrcode));
         return;
     }
+}
+
+void ConnectionPointObject::NodeConnectionPointMethods(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = args.GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
+	Local<Array> items = Array::New(isolate);
+
+	ConnectionPointObject* self = ConnectionPointObject::Unwrap<ConnectionPointObject>(args.This());
+
+	DispObjectImpl::index_t::iterator it;
+	uint32_t cnt = 0;
+
+	for (it = self->index.begin(); it != self->index.end(); it++)
+	{
+		items->Set(ctx, cnt++, v8str(isolate, it->second->name.c_str()));
+	}
+
+	args.GetReturnValue().Set(items);
 }
 
 //-------------------------------------------------------------------------------------------------------

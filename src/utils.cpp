@@ -9,6 +9,8 @@
 
 const GUID CLSID_DispObjectImpl = { 0x9dce8520, 0x2efe, 0x48c0,{ 0xa0, 0xdc, 0x95, 0x1b, 0x29, 0x18, 0x72, 0xc0 } };
 
+const IID IID_IReflect = { 0xAFBF15E5, 0xC37C, 0x11D2,{ 0xB8, 0x8E, 0x00, 0xA0, 0xC9, 0xB4, 0x71, 0xB8} };
+
 //-------------------------------------------------------------------------------------------------------
 
 #define ERROR_MESSAGE_WIDE_MAXSIZE 1024
@@ -186,11 +188,20 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 		if (allow_disp && UnknownDispGet(by_ref ? *v.ppunkVal : v.punkVal, &disp)) {
 			return DispObject::NodeCreate(isolate, disp, L"Unknown", option_auto);
 		}
-		return v8str(isolate, "[Unknown]");
+		// Check for NULL value
+		if ((by_ref && *v.ppunkVal) || v.punkVal)
+		{
+			return VariantObject::NodeCreate(isolate, v);
+		}
+		else if (!v.punkVal) {
+			return Null(isolate);
+		}
 	}
 	case VT_BSTR: {
         BSTR bstr = by_ref ? (v.pbstrVal ? *v.pbstrVal : nullptr) : v.bstrVal;
-        if (!bstr) return String::Empty(isolate);
+        //if (!bstr) return String::Empty(isolate);
+		// Sometimes we need to distinguish between NULL and empty string
+		if (!bstr) return Null(isolate);
 		return v8str(isolate, bstr);
     }
 	case VT_VARIANT: 
@@ -388,7 +399,15 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 	else {
 		String::Value str(isolate, val);
 		var.vt = VT_BSTR;
-		var.bstrVal = (str.length() > 0) ? SysAllocString((LPOLESTR)*str) : 0;
+		// For some apps there is still a difference between "" and NULL string, so we should support it here gracefully
+		if (*str)
+		{
+			var.bstrVal = SysAllocString((LPOLESTR)*str);
+		}
+		else {
+			var.bstrVal = 0;
+		}
+		//var.bstrVal = (str.length() > 0) ? SysAllocString((LPOLESTR)*str) : 0;
 	}
 	if (vt != VT_EMPTY && vt != VT_NULL && vt != VT_VARIANT) {
 		if FAILED(VariantChangeType(&var, &var, 0, vt))
@@ -566,11 +585,17 @@ HRESULT STDMETHODCALLTYPE DispObjectImpl::Invoke(DISPID dispIdMember, REFIID rii
 	Local<Value> name, val, ret;
 
 	// Prepare name by member id
-	if (dispIdMember != DISPID_VALUE && !index.empty()) {
+	if (!index.empty()) {
 		index_t::const_iterator p = index.find(dispIdMember);
-		if (p == index.end()) return DISP_E_MEMBERNOTFOUND;
-		name_t &info = *p->second;
-		name = v8str(isolate, info.name.c_str());
+		if (p == index.end())
+		{
+			// DispID may be 0 for  regular member or for DISPID_VALUE.
+			// Since regular method not found assume DISPID_VALUE if it is 0.
+			if(dispIdMember != DISPID_VALUE) return DISP_E_MEMBERNOTFOUND;
+		} else {
+			name_t& info = *p->second;
+			name = v8str(isolate, info.name.c_str());
+		}
 	}
 	// Set property value
 	if ((wFlags & DISPATCH_PROPERTYPUT) != 0) {
@@ -675,3 +700,17 @@ double ToOleDate(double posixDate) {
 }
 
 //-------------------------------------------------------------------------------------------------------
+
+// Sleep is essential to have proper WScript emulation
+void WinaxSleep(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = args.GetIsolate();
+	Local<Context> ctx = isolate->GetCurrentContext();
+
+	if (args.Length() == 0 && !args[0]->IsUint32()) {
+		isolate->ThrowException(InvalidArgumentsError(isolate));
+		return;
+	}
+	uint32_t ms = (args[0]->Uint32Value(ctx)).FromMaybe(0);
+	Sleep(ms);
+	args.GetReturnValue().SetUndefined();
+}

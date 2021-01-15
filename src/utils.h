@@ -459,6 +459,9 @@ public:
 // {9DCE8520-2EFE-48C0-A0DC-951B291872C0}
 extern const GUID CLSID_DispObjectImpl;
 
+// {AFBF15E5-C37C-11D2-B88E-00A0C9B471B8}
+extern const IID IID_IReflect;
+
 class DispObjectImpl : public UnknownImpl<IDispatch> {
 public:
 	Persistent<Object> obj;
@@ -475,14 +478,19 @@ public:
 	names_t names;
 	index_t index;
 	bool reverse_arguments;
+	IID connIfIID;
 
-	inline DispObjectImpl(const Local<Object> &_obj, bool revargs = true) : obj(Isolate::GetCurrent(), _obj), dispid_next(1), reverse_arguments(revargs){}
+	inline DispObjectImpl(const Local<Object> &_obj, bool revargs = true, IID connIfIID=IID_NULL) : obj(Isolate::GetCurrent(), _obj), dispid_next(1), reverse_arguments(revargs), connIfIID(connIfIID){}
 	virtual ~DispObjectImpl() { obj.Reset(); }
 
 	// IUnknown interface
 	virtual HRESULT __stdcall QueryInterface(REFIID qiid, void **ppvObject) {
+		if( qiid==this->connIfIID) { return UnknownImpl<IDispatch>::QueryInterface(IID_IDispatch, ppvObject); }
+		//if (qiid == this->connIfIID) { *ppvObject = this; return S_OK; }
 		if (qiid == CLSID_DispObjectImpl) { *ppvObject = this; return S_OK; }
-		return UnknownImpl<IDispatch>::QueryInterface(qiid, ppvObject);
+		HRESULT res = UnknownImpl<IDispatch>::QueryInterface(qiid, ppvObject);
+		NODE_DEBUG_MSG("RES")
+		return res;
 	}
 
 	// IDispatch interface
@@ -496,3 +504,5 @@ double FromOleDate(double);
 double ToOleDate(double);
 
 //-------------------------------------------------------------------------------------------------------
+// Sleep is essential to have proper WScript emulation
+void WinaxSleep(const FunctionCallbackInfo<Value>& args);
