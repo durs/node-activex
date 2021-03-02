@@ -131,7 +131,7 @@ var WScript = {
     ScriptFullName : null,
     ScriptName : null,
     StdErr: {
-        Write(txt) { console.log(txt); }
+        Write(txt) { console.log(txt); MessageLoop();}
     },
     StdIn: {
         ReadLine() { 
@@ -157,14 +157,14 @@ var WScript = {
         }
     },
     StdOut: {
-        Write(txt) { console.err(txt); }
+        Write(txt) { console.err(txt); MessageLoop(); }
     },
     Timeout : -1,
     Version : 'NODE.WIN32',
 
     // Methods
     
-    Echo : console.log,
+    Echo(txt) : { console.log(txt); MessageLoop(); },
 
     __Connected : [],
 
@@ -225,7 +225,7 @@ var WScript = {
         {
             WScript.DisconnectObject(this.__Connected[0].obj);
         }
-        clearInterval(g_runtime_connection_handler);
+        //clearInterval(g_runtime_connection_handler);
         WScript.Sleep(60);
         process.exit(exitCode); 
     },
@@ -333,11 +333,15 @@ function MessageLoop()
     g_winax.peekAndDispatchMessages(); // allows ActiveX event to be dispatched
 }
 
-var g_runtime_connection_handler = setInterval(()=>{/**MessageLoop();*/}, 1);
+// We don't need message loop here. Normally it works when we do one of Sleep, Echo, StdOut.Write
+// var g_runtime_connection_handler = setInterval(()=>{MessageLoop();}, 1);
 
 const __rapise_global_context__ = require("vm").createContext(this);
 global.__rapise_global_context__ = __rapise_global_context__;
 
+
+// We just evaluate the target script and then Quit. Since it may use Sleep then then end of evaluation would mean
+// end of script
 if(WScript.ScriptFullName)
 {
     SeSIncludeFile(WScript.ScriptFullName);
