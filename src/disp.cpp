@@ -458,6 +458,7 @@ Local<Object> DispObject::NodeCreate(Isolate *isolate, const Local<Object> &pare
 void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
 	Local<Context> ctx = isolate->GetCurrentContext();
+	bool isGetObject = false;
     int argcnt = args.Length();
     if (argcnt < 1) {
         isolate->ThrowException(InvalidArgumentsError(isolate));
@@ -466,7 +467,9 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     int options = (option_async | option_type);
     if (argcnt > 1) {
         Local<Value> val, argopt = args[1];
-        if (!argopt.IsEmpty() && argopt->IsObject()) {
+		bool isEmpty = argopt.IsEmpty();
+		bool isObject = argopt->IsObject();
+        if (!isEmpty && isObject) {
             auto opt = Local<Object>::Cast(argopt);
 			if (opt->Get(ctx, v8str(isolate, "async")).ToLocal(&val)) {
 				if (!v8val2bool(isolate, val, true)) options &= ~option_async;
@@ -477,9 +480,12 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 			if (opt->Get(ctx, v8str(isolate, "activate")).ToLocal(&val)) {
 				if (v8val2bool(isolate, val, false)) options |= option_activate;
 			}
+			if (opt->Get(ctx, v8str(isolate, "getobject")).ToLocal(&val)) {
+				if (v8val2bool(isolate, val, false)) isGetObject = true;
+			}
 		}
     }
-    
+   
     // Invoked as plain function
     if (!args.IsConstructCall()) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
@@ -511,17 +517,26 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 		if (vname.length() <= 0) hrcode = E_INVALIDARG;
 		else {
 			name.assign((LPOLESTR)*vname, vname.length());
-			CLSID clsid;
-			hrcode = CLSIDFromProgID(name.c_str(), &clsid);
-			if SUCCEEDED(hrcode) {
-				if ((options & option_activate) == 0) hrcode = E_FAIL; 
-				else {
-					CComPtr<IUnknown> unk;
-					hrcode = GetActiveObject(clsid, NULL, &unk);
-					if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
-				}
-				if FAILED(hrcode) {
-					hrcode = disp.CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER);
+
+			if (isGetObject)
+			{
+				CComPtr<IUnknown> unk;
+				hrcode = CoGetObject(name.c_str(), NULL, IID_IUnknown, (void**)&unk);
+				if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
+
+			} else {
+				CLSID clsid;
+				hrcode = CLSIDFromProgID(name.c_str(), &clsid);
+				if SUCCEEDED(hrcode) {
+					if ((options & option_activate) == 0) hrcode = E_FAIL;
+					else {
+						CComPtr<IUnknown> unk;
+						hrcode = GetActiveObject(clsid, NULL, &unk);
+						if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
+					}
+					if FAILED(hrcode) {
+						hrcode = disp.CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER);
+					}
 				}
 			}
 		}
@@ -629,8 +644,15 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
 			Local<Value> result;
 			HRESULT hrcode = self->valueOf(isolate, args.This(), result);
 			if FAILED(hrcode) isolate->ThrowException(Win32Error(isolate, hrcode, L"Unable to Get Value"));
+			
+			MaybeLocal<Object> localObj = result->ToObject(ctx);
+			if (localObj.IsEmpty())
+			{
+				args.GetReturnValue().SetUndefined();
+				return;
+			}
 
-			Local<Object> obj = result->ToObject(ctx).ToLocalChecked();
+			Local<Object> obj = localObj.ToLocalChecked();
 			MaybeLocal<Value> realProp = obj->GetRealNamedPropertyInPrototypeChain(ctx, v8str(isolate, id));
 			if (realProp.IsEmpty())
 			{

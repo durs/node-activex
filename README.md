@@ -80,6 +80,17 @@ var v_short_from_cast = winax.cast(17, 'short');
 	- **__methods** - list member mathods by names (ITypeInfo::GetFuncDesc)
 	- **__vars** - list member variables by names (ITypeInfo::GetVarDesc) 
 
+ * Full WScript Emulation Support through nodewscript
+	- **ActiveXObject** type
+	- **WScript.CreateObject**
+	- **WScript.ConnectObject**
+	- **WScript.DisconnectObject**
+	- **WScript.Sleep**
+	- **WScript.Arguments**
+	- **WScript.Version**
+	- **GetObject**
+	- **Enumerator**
+
 # Usage example
 
 Install package throw NPM (see below **Building** for details)
@@ -199,6 +210,60 @@ npm rebuild winax --runtime=electron --target=2.0.2 --disturl=https://atom.io/do
 ```
 Change --target value to your electron version.
 See also Electron Documentation: [Using Native Node Modules](https://electron.atom.io/docs/tutorial/using-native-node-modules/).
+
+# WScript
+
+[WScript](https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/wscript) is designed as a runtime, so WSH scripts should be executed from command line. WScript emulation mode allows one to use standard **WScript** features and mix them with nodejs and ES6 parts.
+
+There is one significant difference between WScript and NodeJS in general. NodeJS is designed to be [non-blocking](https://nodejs.org/en/docs/guides/blocking-vs-non-blocking/) and execution is done when last statement is done AND all pending promises and callbacks are resolved. WScript runtime is linear. It is done when last statement is executed.
+
+So NodeJS is more convenient for writing things like async web services. Also with NodeJS you get access to invaluable collection of **npm** modules.
+
+WScript has impressive collection of Windows-specific APIs available through ActiveX (such as `WScript.Shell`, `FileSystemObject` etc). Also it supports application events to implement two way communication with external apps and processes. 
+
+This module allows taking the best from the two worlds - you may now use **npm** modules in your WScript scripts. Or, if you have bunch of legacy JScript sources, you may now execute them using this **NodeJS**-based runtime.
+
+If you install this package with -g key, you will have `nodewscript` command. 
+
+Usage:
+```
+nodewscript [options] <Filename.js>
+```
+
+Its direct analog in the windows scripting host is `cscript.exe` (it it outputs to the console, and `WScript.Echo` writes a line instead of showing a popup window).
+
+Where `Filename.js` is a file designed for windows scripting host.
+
+## WScript Limitations
+
+### Implicit Properties
+
+This is a key drawback of v8 engine compared to MS. Consider an example:
+
+```javascript
+    var a = WScript.CreateObject(...)
+    if( a.Prop )
+    {
+        // If 'Prop' is a dynamic property (i.e. it is not defined in TypeInfo and
+        // not marked explicitly as a property, then never got here. Even if a.Prop is null or false.
+    }
+```
+
+### Function Setters
+
+```javascript
+var WshShell = new ActiveXObject("WScript.Shell");
+var processEnv = WshShell.Environment("PROCESS");
+processEnv("ENV_VAR") = "CUSTOM_VALUE";  // This syntax is valid for JScript, but will throw syntax error on v8
+```
+### Events & Sleep
+
+Default WScript engine checks for events every time you do some sync operation or Sleep. In this implementation we check for events when `WScript.Sleep` is executed. 
+
+### 32 vs 64 Bit
+
+It is using the same bitness as installed version of the  nodejs. So if your JScript files are designed for 32 bit, make sure to have nodejs x86 version installed before installing the **winax**.
+
 
 # Tests
 

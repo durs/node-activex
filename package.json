@@ -24,7 +24,9 @@
     "url": "https://github.com/durs",
     "email": "yuri.dursin@gmail.com"
   },
-  "bin": {"nodewscript": "./NodeWScript.js"}
+  "bin": {
+    "nodewscript": "./NodeWScript.js"
+  },
   "contributors": [
     "durs <yuri.dursin@gmail.com>",
     "Alexey Grinevich <alexey.grinevich@inflectra.com>"

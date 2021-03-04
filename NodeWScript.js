@@ -1,10 +1,16 @@
-var g_winax = require('winax');
+#!/usr/bin/env node 
+var g_winax = require('./activex');
 var path = require('path');
 
 if(process.argv.length<3)
 {
     console.error("Missing argument. Usage:\nnodewscript SomeJS.js <other arguments>")
 }
+
+// For the case we want to use 'require' or 'module' - we need to make it available through global.
+global.require = require;
+global.exports = exports;
+global.module = module;
 
 global.SeSIncludeFile = function (includePath, isLocal, ctx) {
 
@@ -14,20 +20,21 @@ global.SeSIncludeFile = function (includePath, isLocal, ctx) {
     var path = require("path");
 
     var absolutePath = path.resolve(includePath);
-    //console.log('Incl: '+absolutePath)
     var data = fs.readFileSync(absolutePath);
     var script = new vm.Script(data, { filename: absolutePath, displayErrors: true });
     if (isLocal && ctx) {
         if (!ctx.__runctx__) ctx.__runctx__ = vm.createContext(ctx);
         script.runInContext(ctx.__runctx__);
     } else {
-        //script.runInContext(global.__rapise_global_context__);
         script.runInThisContext();
     }
 
     return '';
-    //return 'console.log("Done: "+'+JSON.stringify(absolutePath) +')';    
 };
+
+global.GetObject = function GetObject(strMoniker) {
+    return new g_winax.Object(strMoniker, {getobject:true});
+}
 
 var WinAXActiveXObject = ActiveXObject;
 
@@ -131,7 +138,7 @@ var WScript = {
     ScriptFullName : null,
     ScriptName : null,
     StdErr: {
-        Write(txt) { console.log(txt); MessageLoop();}
+        Write(txt) { console.log(txt); }
     },
     StdIn: {
         ReadLine() { 
@@ -157,14 +164,14 @@ var WScript = {
         }
     },
     StdOut: {
-        Write(txt) { console.err(txt); MessageLoop(); }
+        Write(txt) { console.err(txt); }
     },
     Timeout : -1,
     Version : 'NODE.WIN32',
 
     // Methods
     
-    Echo(txt) : { console.log(txt); MessageLoop(); },
+    Echo : console.log,
 
     __Connected : [],
 
@@ -225,7 +232,6 @@ var WScript = {
         {
             WScript.DisconnectObject(this.__Connected[0].obj);
         }
-        //clearInterval(g_runtime_connection_handler);
         WScript.Sleep(60);
         process.exit(exitCode); 
     },
@@ -314,6 +320,7 @@ Parse all arguments and process those related to core WScript:
         eval("ArgF = function ("+argArr.join(",")+") { return WScript.__Args[arguments[0]];  }");
         ArgF.item = function(i) { return WScript.__Args[i] };
         ArgF.toString = function() { return WScript.__Args.join(' '); }
+        ArgF.Count = function() { return WScript.__Args.length; };
 
         this.Arguments = ArgF;
     }
@@ -333,21 +340,12 @@ function MessageLoop()
     g_winax.peekAndDispatchMessages(); // allows ActiveX event to be dispatched
 }
 
-// We don't need message loop here. Normally it works when we do one of Sleep, Echo, StdOut.Write
-// var g_runtime_connection_handler = setInterval(()=>{MessageLoop();}, 1);
-
 const __rapise_global_context__ = require("vm").createContext(this);
 global.__rapise_global_context__ = __rapise_global_context__;
 
-
-// We just evaluate the target script and then Quit. Since it may use Sleep then then end of evaluation would mean
-// end of script
 if(WScript.ScriptFullName)
 {
     SeSIncludeFile(WScript.ScriptFullName);
 } else {
     WScript.StdErr.Write("File.js missing.\nUsage wscriptnode <File.js>")
 }
-
-WScript.Quit(0);
-
