@@ -549,8 +549,9 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 			isolate->ThrowException(InvalidArgumentsError(isolate));
 			return;
 		}
-		void *data = input->Buffer()->GetContents().Data();
-		IDispatch* p = (IDispatch *) *(static_cast<INT_PTR*>(data));
+		// void *data = input->Buffer()->GetContents().Data(); - depricate soon warning
+		std::shared_ptr<BackingStore> store = input->Buffer()->GetBackingStore();
+		IDispatch* p = (IDispatch *) *(static_cast<INT_PTR*>(store->Data()));
 		disp = CComPtr<IDispatch>(p);
 		hrcode = S_OK;
 	}
