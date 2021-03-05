@@ -300,6 +300,8 @@ public:
 
 	static Local<Object> NodeCreateInstance(const FunctionCallbackInfo<Value> &args);
 	static void NodeCreate(const FunctionCallbackInfo<Value> &args);
+	static Local<Object> NodeCreate(Isolate* isolate, const VARIANT& var);
+
 	static void NodeClear(const FunctionCallbackInfo<Value> &args);
 	static void NodeAssign(const FunctionCallbackInfo<Value> &args);
 	static void NodeCast(const FunctionCallbackInfo<Value> &args);
@@ -309,6 +311,8 @@ public:
 	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
 	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
 	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+
+
 
 private:
 	CComVariant value, pvalue;
@@ -326,7 +330,8 @@ public:
     static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
     static void NodeCreate(const FunctionCallbackInfo<Value> &args);
     static void NodeAdvise(const FunctionCallbackInfo<Value> &args);
-    static void NodeUnadvise(const FunctionCallbackInfo<Value> &args);
+	static void NodeUnadvise(const FunctionCallbackInfo<Value> &args);
+	static void NodeConnectionPointMethods(const FunctionCallbackInfo<Value> &args);
 
 private:
     bool InitIndex();
@@ -334,5 +339,7 @@ private:
     CComPtr<IConnectionPoint> ptr;
     CComPtr<IDispatch> disp;
     DispObjectImpl::index_t index;
+
 	std::unordered_set<DWORD> cookies;
+
 };

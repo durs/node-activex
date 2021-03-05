@@ -17,6 +17,13 @@ NODE_MODULE_INIT(/*exports, module, context*/) {
   VariantObject::NodeInit(exports, isolate, context);
   ConnectionPointObject::NodeInit(exports, isolate, context);
 
+  // Sleep is essential to have proper WScript emulation
+  exports->Set(context,
+      String::NewFromUtf8(isolate, "winaxsleep", NewStringType::kNormal)
+      .ToLocalChecked(),
+      FunctionTemplate::New(isolate, WinaxSleep)
+      ->GetFunction(context).ToLocalChecked()).FromJust();
+
   /* Example implementation of a context-aware addon:
   // Create a new instance of `AddonData` for this instance of the addon and
   // tie its life cycle to that of the Node.js environment.

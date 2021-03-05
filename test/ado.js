@@ -77,6 +77,11 @@ describe("ADODB.Connection", function() {
 
 describe("Release objects", function() {
     
+    it("try call", function() {
+        if (con) try { this.test.title += ': SUCCESS (' + con.Version + ')'; }
+        catch(e) { this.test.title += ': FAILED (' + e.message + ')'; }
+    });
+
     it("release", function() {
         this.test.title += ': ' + winax.release(fso, con, rs, fields);
     });
@@ -85,9 +90,5 @@ describe("Release objects", function() {
         this.test.title += ': ' + winax.release(fso, con, rs, fields);
     });
     
-    it("try call", function() {
-        if (con) try { this.test.title += ': SUCCESS (' + con.Version + ')'; }
-        catch(e) { this.test.title += ': FAILED (' + e.message + ')'; }
-    });
     
 });
