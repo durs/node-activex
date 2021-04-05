@@ -36,5 +36,12 @@
 using namespace v8;
 using namespace node;
 
+#if (V8_MAJOR_VERSION >= 7) 
+#define NODE_V8V7
+#if (V8_MAJOR_VERSION >= 8) 
+#define NODE_V8V8
+#endif
+#endif
+
 // Application defines
 //#define TEST_ADVISE

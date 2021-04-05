@@ -184,6 +184,7 @@ console.log("Cell E4 value is", data[1][2]);
 
 This project uses Visual C++ 2013 (or later versions then support C++11 standard).
 Bulding also requires node-gyp and python 2.6 (or later) to be installed. 
+Supported NodeJS Versions (x86 or x64): 10, 11, 12, 13, 14, 15 
 You can do this with npm:
 ```
 npm install --global --production windows-build-tools
@@ -206,7 +207,7 @@ node-gyp build
 
 For Electron users, need rebuild with a different V8 version:
 ```
-npm rebuild winax --runtime=electron --target=2.0.2 --disturl=https://atom.io/download/atom-shell --build-from-source
+npm rebuild winax --runtime=electron --target=12.0.2 --dist-url=https://electronjs.org/headers --build-from-source
 ```
 Change --target value to your electron version.
 See also Electron Documentation: [Using Native Node Modules](https://electron.atom.io/docs/tutorial/using-native-node-modules/).
