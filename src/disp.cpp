@@ -549,7 +549,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 			isolate->ThrowException(InvalidArgumentsError(isolate));
 			return;
 		}
-#ifdef NODE_V8V8
+#if (NODE_MAJOR_VERSION >= 14)
 		std::shared_ptr<BackingStore> store = input->Buffer()->GetBackingStore();
 		void *data = store->Data();
 #else
