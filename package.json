@@ -1,6 +1,6 @@
 {
   "name": "winax",
-  "version": "3.1.4",
+  "version": "3.1.5",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
@@ -20,7 +20,7 @@
     "DisconnectObject"
   ],
   "author": {
-    "name": "durs",
+    "name": "Yuri Dursin",
     "url": "https://github.com/durs",
     "email": "yuri.dursin@gmail.com"
   },
@@ -28,7 +28,7 @@
     "nodewscript": "./NodeWScript.js"
   },
   "contributors": [
-    "durs <yuri.dursin@gmail.com>",
+    "Yuri Dursin <yuri.dursin@gmail.com>",
     "Alexey Grinevich <alexey.grinevich@inflectra.com>"
   ],
   "repository": {
