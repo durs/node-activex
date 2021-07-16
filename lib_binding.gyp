@@ -7,6 +7,9 @@
         'src/utils.cpp',
         'src/disp.cpp'
       ],
+      'defines': [
+        'BUILDING_NODE_EXTENSION',
+      ],
       'direct_dependent_settings': {
         'include_dirs': ['.']
       },
