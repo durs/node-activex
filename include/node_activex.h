@@ -4,5 +4,5 @@
 // Note that this does use the namespaces v8 and node in the current configuration
 
 #include "../src/stdafx.h"
-#include "../src/disp.h""
+#include "../src/disp.h"
 #include "../src/utils.h"
