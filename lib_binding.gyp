@@ -11,7 +11,7 @@
         'BUILDING_NODE_EXTENSION',
       ],
       'direct_dependent_settings': {
-        'include_dirs': ['.']
+        'include_dirs': ['include']
       },
       'dependencies': [
       ]
