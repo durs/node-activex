@@ -180,6 +180,31 @@ console.log("Cell E4 value is", data[1][2]);
 
 - [examples/ado.js](https://github.com/durs/node-activex/blob/master/examples/ado.js)
 
+# Usage as a library
+
+The repo allows to re-use some of its code as a library for your own native node addon.
+
+To include it, install it as a normal node-dependency and then add it
+to the `"dependencies"` section of your `binding.gyp` file like this:
+```
+"dependencies": [
+  "<!(node -p \"require.resolve('winax/lib_binding.gyp')\"):lib_node_activex"
+]
+```
+
+In your code, you can then include it using:
+```cpp
+#include <node_activex.h>
+```
+
+This makes functions like `Variant2Value` or `Value2Variant` that translate between COM VARIANT and node types
+available in your code.
+Note that providing this library functionality is not the core target of this repo however,
+so importing it eg. currently declares
+all methods in the global namespace and opens the namespaces `v8` and `node`.
+
+Check the source code [`src/disp.h`](src/disp.h) and [`src/utils.h`](src/utils.h) for details.
+
 # Building
 
 This project uses Visual C++ 2013 (or later versions then support C++11 standard).
