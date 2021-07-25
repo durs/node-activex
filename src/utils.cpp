@@ -170,7 +170,7 @@ Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp) 
 		return Number::New(isolate, dblval);		
 	}
 	case VT_BOOL:
-		return Boolean::New(isolate, (by_ref ? *v.pboolVal : v.boolVal) == VARIANT_TRUE);
+		return Boolean::New(isolate, (by_ref ? *v.pboolVal : v.boolVal) != VARIANT_FALSE);
 	case VT_DISPATCH: {
 		IDispatch *disp = (by_ref ? *v.ppdispVal : v.pdispVal);
 		if (!disp) return Null(isolate);
@@ -271,7 +271,7 @@ Local<Value> Variant2String(Isolate *isolate, const VARIANT &v) {
 		break;		
 	}
 	case VT_BOOL:
-		strcpy(buf, ((by_ref ? *v.pboolVal : v.boolVal) == VARIANT_TRUE) ? "true" : "false");
+		strcpy(buf, ((by_ref ? *v.pboolVal : v.boolVal) == VARIANT_FALSE) ? "false" : "true");
 	case VT_DISPATCH:
 		strcpy(buf, "[Dispatch]");
 		break;
