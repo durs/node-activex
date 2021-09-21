@@ -1,34 +1,35 @@
-var winax = require('../activex');
+const winax = require('../activex');
 
-var path = require('path'); 
+const path = require('path'); 
 const assert = require('assert');
+const x64 = process.arch.indexOf('64') >= 0;        
 
-var js_arr = ['1', 2, 3];
+const js_arr = ['1', 2, 3];
 
 describe("Variants", function() {
 
     it("Short Array", function() {
-        var arr = new winax.Variant(js_arr, 'short');
+        const arr = new winax.Variant(js_arr, 'short');
         assert.equal(arr.length, js_arr.length);
         assert.strictEqual(arr[0], 1);
     });
 
     it("String Array", function() {
-        var arr = new winax.Variant(js_arr, 'string');
+        const arr = new winax.Variant(js_arr, 'string');
         assert.equal(arr.length, js_arr.length);
         assert.strictEqual(arr[1], '2');
     });
 
     it("Variant Array", function() {
-        var arr = new winax.Variant(js_arr, 'variant');
+        const arr = new winax.Variant(js_arr, 'variant');
         assert.equal(arr.length, js_arr.length);
         assert.strictEqual(arr[0], js_arr[0]);
         assert.strictEqual(arr[1], js_arr[1]);
     });
 
     it("References", function() {
-        var v = new winax.Variant();
-        var ref = new winax.Variant(v, 'byref');
+        const v = new winax.Variant();
+        const ref = new winax.Variant(v, 'byref');
 
         v.assign(1, 'string');
         assert.strictEqual(v.valueOf(), '1');
@@ -41,6 +42,25 @@ describe("Variants", function() {
         v.clear();
         assert.strictEqual(v.valueOf(), undefined);
         assert.strictEqual(ref.valueOf(), undefined);
+    });
+
+    it("Dispatch pointer as Uint8Array", function() {
+        
+        // create simple dispatch object
+        const obj = new winax.Object({
+            test: function(v) { return v*2; }
+        });
+        
+        // convert dispatch pointer to bytes array
+        const varr = new winax.Variant(obj, 'uint8[]');
+        
+        // convert to javascript Uint8Array and check length
+        const arr = new Uint8Array(varr.valueOf());
+        assert.strictEqual(arr.length, x64 ? 8 : 4);        
+        
+        // create dispatch object from array pointer and test
+        const obj2 = new winax.Object(arr);
+        assert.strictEqual(obj2.test(2), 4);
     });
 
 });

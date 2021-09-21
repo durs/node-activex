@@ -544,19 +544,14 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 
 	// Use supplied dispatch pointer
 	else if (args[0]->IsUint8Array()) {
-		Local<Uint8Array> input = args[0].As<Uint8Array>();
-		if (input->Length() != sizeof(INT_PTR)) {
-			isolate->ThrowException(InvalidArgumentsError(isolate));
-			return;
-		}
-#if (NODE_MAJOR_VERSION >= 14)
-		std::shared_ptr<BackingStore> store = input->Buffer()->GetBackingStore();
-		void *data = store->Data();
-#else
-		void *data = input->Buffer()->GetContents().Data();
-#endif
-		IDispatch* p = (IDispatch *) *(static_cast<INT_PTR*>(data));
-		disp = CComPtr<IDispatch>(p);
+        size_t len = node::Buffer::Length(args[0]);
+        void *data = node::Buffer::Data(args[0]);
+        IDispatch *p = (len == sizeof(INT_PTR)) ? (IDispatch *) *(static_cast<INT_PTR*>(data)) : nullptr;
+        if (!p) {
+            isolate->ThrowException(InvalidArgumentsError(isolate));
+            return;
+        }
+		disp.Attach(p);
 		hrcode = S_OK;
 	}
 
@@ -876,12 +871,22 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 			String::Value vtstr(isolate, type);
 			const wchar_t *pvtstr = (const wchar_t *)*vtstr;
 			int vtstr_len = vtstr.length();
-			if (vtstr_len > 0 && *pvtstr == 'p') {
-				vt |= VT_BYREF;
-				vtstr_len--;
-				pvtstr++;
-			}
-			if (vtstr_len > 0) {
+			if (vtstr_len > 1) {
+                if (pvtstr[0] == 'p') {
+				    vt |= VT_BYREF;
+				    vtstr_len--;
+				    pvtstr++;
+			    }
+                else if (pvtstr[vtstr_len - 1] == '*') {
+                    vt |= VT_BYREF;
+                    vtstr_len--;
+                }
+                else if (pvtstr[vtstr_len - 2] == '[' || pvtstr[vtstr_len - 1] == ']') {
+                    vt |= VT_ARRAY;
+                    vtstr_len -= 2;
+                }
+            }
+            if (vtstr_len > 0) {
 				std::wstring type(pvtstr, vtstr_len);
                 vt |= vtypes.find(type);
 			}
@@ -899,7 +904,10 @@ bool VariantObject::assign(Isolate *isolate, Local<Value> &val, Local<Value> &ty
 
 	value.Clear();
 	pvalue.Clear();
-	if ((vt & VT_BYREF) == 0) {
+    if ((vt & VT_ARRAY) != 0) {
+        Value2SafeArray(isolate, val, value, vt & ~VT_ARRAY);
+    }
+	else if ((vt & VT_BYREF) == 0) {
 		Value2Variant(isolate, val, value, vt);
 	}
 	else {

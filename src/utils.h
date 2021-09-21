@@ -345,6 +345,7 @@ Local<Value> Variant2Array2(Isolate *isolate, const VARIANT &v);
 Local<Value> Variant2Value(Isolate *isolate, const VARIANT &v, bool allow_disp = false);
 Local<Value> Variant2String(Isolate *isolate, const VARIANT &v);
 void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt = VT_EMPTY);
+void Value2SafeArray(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt);
 bool Value2Unknown(Isolate *isolate, Local<Value> &val, IUnknown **unk);
 bool VariantUnkGet(VARIANT *v, IUnknown **unk);
 bool VariantDispGet(VARIANT *v, IDispatch **disp);

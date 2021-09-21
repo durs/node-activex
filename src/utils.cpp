@@ -415,6 +415,30 @@ void Value2Variant(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt
 	}
 }
 
+void Value2SafeArray(Isolate *isolate, Local<Value> &val, VARIANT &var, VARTYPE vt) {
+    Local<Context> ctx = isolate->GetCurrentContext();
+    if (val.IsEmpty() || val->IsUndefined()) {
+        var.vt = VT_EMPTY;
+    }
+    else if (val->IsNull()) {
+        var.vt = VT_NULL;
+    }
+    else if (val->IsObject()) {
+        // Test conversion dispatch pointer to Uint8Array
+        if (vt == VT_UI1) {
+            auto obj = Local<Object>::Cast(val);
+            auto ptr = DispObject::GetDispPtr(isolate, obj);
+            size_t len = sizeof(UINT_PTR);
+            var.vt = VT_ARRAY | vt;
+            var.parray = SafeArrayCreateVector(vt, 0, len);
+            if (var.parray != nullptr) memcpy(var.parray->pvData, &ptr, len);
+        }
+    }
+    else {
+        var.vt = VT_EMPTY;
+    }
+}
+
 bool Value2Unknown(Isolate *isolate, Local<Value> &val, IUnknown **unk) {
     if (val.IsEmpty() || !val->IsObject()) return false;
     auto obj = Local<Object>::Cast(val);

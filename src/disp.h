@@ -213,10 +213,17 @@ public:
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
 		return !clazz.IsEmpty() && clazz->HasInstance(obj);
 	}
-	static bool GetValueOf(Isolate *isolate, const Local<Object> &obj, VARIANT &value) {
-		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
-		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
-		DispObject *self = Unwrap<DispObject>(obj);
+    static DispObject *GetPtr(Isolate *isolate, const Local<Object> &obj) {
+        Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
+        if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return nullptr;
+        return Unwrap<DispObject>(obj);
+    }
+    static IDispatch *GetDispPtr(Isolate *isolate, const Local<Object> &obj) {
+        DispObject *self = GetPtr(isolate, obj);
+        return (self && self->disp) ? self->disp->ptr : nullptr;
+    }
+    static bool GetValueOf(Isolate *isolate, const Local<Object> &obj, VARIANT &value) {
+		DispObject *self = GetPtr(isolate, obj);
 		return self && SUCCEEDED(self->valueOf(isolate, value, false));
 	}
 	static Local<Object> NodeCreate(Isolate *isolate, IDispatch *disp, const std::wstring &name, int opt) {
