@@ -1,8 +1,8 @@
 const winax = require('../activex');
 
-const path = require('path'); 
+const path = require('path');
 const assert = require('assert');
-const x64 = process.arch.indexOf('64') >= 0;        
+const x64 = process.arch.indexOf('64') >= 0;
 
 const js_arr = ['1', 2, 3];
 
@@ -45,23 +45,31 @@ describe("Variants", function() {
     });
 
     it("Dispatch pointer as Uint8Array", function() {
-        
+
         // create simple dispatch object
         const obj = new winax.Object({
-            test: function(v) { return v*2; }
+            test: function(v) { return v * 2; }
         });
-        
+
         // convert dispatch pointer to bytes array
         const varr = new winax.Variant(obj, 'uint8[]');
-        
+
         // convert to javascript Uint8Array and check length
         const arr = new Uint8Array(varr.valueOf());
-        assert.strictEqual(arr.length, x64 ? 8 : 4);        
-        
+        assert.strictEqual(arr.length, x64 ? 8 : 4);
+
         // create dispatch object from array pointer and test
         const obj2 = new winax.Object(arr);
         assert.strictEqual(obj2.test(2), 4);
     });
 
+    if (typeof global.gc === 'function') {
+        global.gc();
+        const mem_usage = process.memoryUsage().heapUsed / 1024;
+        it("Check memory", function() {
+            global.gc();
+            const mem = process.memoryUsage().heapUsed / 1024;
+            if (mem > mem_usage) throw new Error(`used memory increased from ${mem_usage.toFixed(2)}Kb to ${mem.toFixed(2)}Kb`);
+        });
+    }
 });
-

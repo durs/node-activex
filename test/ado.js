@@ -1,6 +1,6 @@
 var winax = require('../activex');
 
-var path = require('path'); 
+var path = require('path');
 const assert = require('assert');
 
 var data_path = path.join(__dirname, '../data/');
@@ -17,14 +17,14 @@ describe("Scripting.FileSystemObject", function() {
 
     it("create data folder if not exists", function() {
         if (fso) {
-            if (!fso.FolderExists(data_path)) 
+            if (!fso.FolderExists(data_path))
                 fso.CreateFolder(data_path);
         }
     });
 
     it("delete DBF file if exists", function() {
         if (fso) {
-            if (fso.FileExists(data_path + filename)) 
+            if (fso.FileExists(data_path + filename))
                 fso.DeleteFile(data_path + filename);
         }
     });
@@ -52,7 +52,7 @@ describe("ADODB.Connection", function() {
 
     it("select records from table", function() {
         if (con) {
-            var rs = con.Execute("Select * from " + filename); 
+            var rs = con.Execute("Select * from " + filename);
             var fields = rs.Fields;
         }
     });
@@ -61,25 +61,25 @@ describe("ADODB.Connection", function() {
         if (rs && fields) {
             var cnt = 0;
             rs.MoveFirst();
-            while (!rs.EOF) { 
+            while (!rs.EOF) {
                 cnt++;
                 var name = fields("Name").Value;
                 var town = fields["City"].value;
                 var phone = fields[2].value;
-                var zip = fields[3].value;    
+                var zip = fields[3].value;
                 rs.MoveNext();
-            }           
-            assert.equal(cnt, reccnt); 
+            }
+            assert.equal(cnt, reccnt);
         }
     });
-    
+
 });
 
 describe("Release objects", function() {
-    
+
     it("try call", function() {
         if (con) try { this.test.title += ': SUCCESS (' + con.Version + ')'; }
-        catch(e) { this.test.title += ': FAILED (' + e.message + ')'; }
+            catch (e) { this.test.title += ': FAILED (' + e.message + ')'; }
     });
 
     it("release", function() {
@@ -89,6 +89,14 @@ describe("Release objects", function() {
     it("double release", function() {
         this.test.title += ': ' + winax.release(fso, con, rs, fields);
     });
-    
-    
+
+    if (typeof global.gc === 'function') {
+        global.gc();
+        const mem_usage = process.memoryUsage().heapUsed / 1024;
+        it("check memory", function() {
+            global.gc();
+            const mem = process.memoryUsage().heapUsed / 1024;
+            if (mem > mem_usage) throw new Error(`used memory increased from ${mem_usage.toFixed(2)}Kb to ${mem.toFixed(2)}Kb`);
+        });
+    }
 });

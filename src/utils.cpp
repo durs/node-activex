@@ -725,6 +725,30 @@ double ToOleDate(double posixDate) {
 
 //-------------------------------------------------------------------------------------------------------
 
+bool NodeMethods::get(Isolate* isolate, const std::wstring &name, Local<Function>* value) {
+    auto ptr = items.find(name);
+    if (ptr == items.end()) return false;
+    Local<FunctionTemplate> ft = ptr->second->Get(isolate);
+    return ft->GetFunction(isolate->GetCurrentContext()).ToLocal(value);
+}
+
+void NodeMethods::add(Isolate* isolate, Local<FunctionTemplate>& clazz, const char* name, FunctionCallback callback) {
+    // see NODE_SET_PROTOTYPE_METHOD
+    HandleScope handle_scope(isolate);
+    Local<Signature> s = Signature::New(isolate, clazz);
+    Local<FunctionTemplate> t = FunctionTemplate::New(isolate, callback, Local<Value>(), s);
+    Local<String> fn_name = String::NewFromUtf8(isolate, name, NewStringType::kInternalized).ToLocalChecked();
+    t->SetClassName(fn_name);
+    
+    clazz->PrototypeTemplate()->Set(fn_name, t);
+
+    String::Value vname(isolate, fn_name);
+    item_type item(new Persistent<FunctionTemplate>(isolate, t));
+    items.emplace(std::wstring((const wchar_t *)*vname), item);
+}
+
+//-------------------------------------------------------------------------------------------------------
+
 // Sleep is essential to have proper WScript emulation
 void WinaxSleep(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = args.GetIsolate();

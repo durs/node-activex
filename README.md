@@ -296,7 +296,7 @@ It is using the same bitness as installed version of the  nodejs. So if your JSc
 [mocha](https://github.com/visionmedia/mocha) is required to run unit tests.
 ```
 npm install -g mocha
-mocha test
+mocha --expose-gc test
 ```
 
 # Contributors

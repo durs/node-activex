@@ -505,5 +505,20 @@ double FromOleDate(double);
 double ToOleDate(double);
 
 //-------------------------------------------------------------------------------------------------------
+
+class NodeMethods : public std::map<std::wstring, Persistent<FunctionTemplate> > {
+public:
+    typedef std::shared_ptr<Persistent<FunctionTemplate>> item_type;
+    typedef std::map<std::wstring, item_type> map_type;
+    map_type items;
+
+    bool get(Isolate* isolate, const std::wstring& name, Local<Function>* value);
+    void add(Isolate* isolate, Local<FunctionTemplate>& clazz, const char* name, FunctionCallback callback);
+};
+
+//-------------------------------------------------------------------------------------------------------
 // Sleep is essential to have proper WScript emulation
+
 void WinaxSleep(const FunctionCallbackInfo<Value>& args);
+
+//-------------------------------------------------------------------------------------------------------

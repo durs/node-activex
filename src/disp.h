@@ -208,6 +208,8 @@ public:
 
 	static Persistent<ObjectTemplate> inst_template;
 	static Persistent<FunctionTemplate> clazz_template;
+    static NodeMethods clazz_methods;
+
 	static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
 	static bool HasInstance(Isolate *isolate, const Local<Value> &obj) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
@@ -288,6 +290,8 @@ public:
 
 	static Persistent<ObjectTemplate> inst_template;
 	static Persistent<FunctionTemplate> clazz_template;
+    static NodeMethods clazz_methods;
+
 	static void NodeInit(const Local<Object> &target, Isolate* isolate, Local<Context> &ctx);
 	static bool HasInstance(Isolate *isolate, const Local<Value> &obj) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);

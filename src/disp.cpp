@@ -9,9 +9,11 @@
 
 Persistent<ObjectTemplate> DispObject::inst_template;
 Persistent<FunctionTemplate> DispObject::clazz_template;
+NodeMethods DispObject::clazz_methods;
 
 Persistent<ObjectTemplate> VariantObject::inst_template;
 Persistent<FunctionTemplate> VariantObject::clazz_template;
+NodeMethods VariantObject::clazz_methods;
 
 Persistent<ObjectTemplate> ConnectionPointObject::inst_template;
 Persistent<FunctionTemplate> ConnectionPointObject::clazz_template;
@@ -413,8 +415,8 @@ void DispObject::NodeInit(const Local<Object> &target, Isolate* isolate, Local<C
     Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
     clazz->SetClassName(v8str(isolate, "Dispatch"));
 
-	NODE_SET_PROTOTYPE_METHOD(clazz, "toString", NodeToString);
-	NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", NodeValueOf);
+    clazz_methods.add(isolate, clazz, "toString", NodeToString);
+    clazz_methods.add(isolate, clazz, "valueOf", NodeValueOf);
 
     Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
@@ -581,14 +583,13 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 
 void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
     Isolate *isolate = args.GetIsolate();
-	Local<Context> ctx = isolate->GetCurrentContext();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
 	String::Value vname(isolate, name);
-	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
+	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"valueOf";
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
     if (_wcsicmp(id, L"__value") == 0) {
         Local<Value> result;
@@ -623,47 +624,42 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
 	else if (_wcsicmp(id, L"__proto__") == 0) {
 		Local<Function> func;
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
-		if (clazz.IsEmpty() || !clazz->GetFunction(ctx).ToLocal(&func)) args.GetReturnValue().SetNull();
-		else args.GetReturnValue().Set(func);
+        Local<Context> ctx = isolate->GetCurrentContext();
+        if (!clazz.IsEmpty() && clazz->GetFunction(ctx).ToLocal(&func)) {
+            args.GetReturnValue().Set(func);
+        }
+        else {
+            args.GetReturnValue().SetNull();
+        }
 	}
-	else if (_wcsicmp(id, L"valueOf") == 0 || !*id) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeValueOf)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-	else if (_wcsicmp(id, L"toString") == 0) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeToString)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-    else {
-		if (!self->get(id, -1, args))
-		{
+	else {
+        Local<Function> func;
+        if (clazz_methods.get(isolate, id, &func)) {
+            args.GetReturnValue().Set(func);
+        }
+
+		else if (!self->get(id, -1, args)) {
 			Local<Value> result;
 			HRESULT hrcode = self->valueOf(isolate, args.This(), result);
 			if FAILED(hrcode) isolate->ThrowException(Win32Error(isolate, hrcode, L"Unable to Get Value"));
 			
+            Local<Context> ctx = isolate->GetCurrentContext();
 			MaybeLocal<Object> localObj = result->ToObject(ctx);
-			if (localObj.IsEmpty())
-			{
+			if (localObj.IsEmpty()) {
 				args.GetReturnValue().SetUndefined();
 				return;
 			}
 
 			Local<Object> obj = localObj.ToLocalChecked();
 			MaybeLocal<Value> realProp = obj->GetRealNamedPropertyInPrototypeChain(ctx, v8str(isolate, id));
-			if (realProp.IsEmpty())
-			{
+			if (realProp.IsEmpty()) {
 				// We may call non-existing property for an object to check its existence
 				// So we should return undefined in this case
 				args.GetReturnValue().SetUndefined();
 			}
 			else {
 				Local<Value> ownProp = realProp.ToLocalChecked();
-				if (ownProp->IsFunction())
-				{
+				if (ownProp->IsFunction()) {
 					Local<Function> func = Local<Function>::Cast(ownProp);
 					if (func.IsEmpty()) return;
 					args.GetReturnValue().Set(func);
@@ -949,12 +945,11 @@ void VariantObject::NodeInit(const Local<Object> &target, Isolate* isolate, Loca
 	// Prepare constructor template
 	Local<FunctionTemplate> clazz = FunctionTemplate::New(isolate, NodeCreate);
 	clazz->SetClassName(v8str(isolate, "Variant"));
-
-	NODE_SET_PROTOTYPE_METHOD(clazz, "clear", NodeClear);
-	NODE_SET_PROTOTYPE_METHOD(clazz, "assign", NodeAssign);
-	NODE_SET_PROTOTYPE_METHOD(clazz, "cast", NodeCast);
-	NODE_SET_PROTOTYPE_METHOD(clazz, "toString", NodeToString);
-	NODE_SET_PROTOTYPE_METHOD(clazz, "valueOf", NodeValueOf);
+    clazz_methods.add(isolate, clazz, "clear", NodeClear);
+    clazz_methods.add(isolate, clazz, "assign", NodeAssign);
+    clazz_methods.add(isolate, clazz, "cast", NodeCast);
+    clazz_methods.add(isolate, clazz, "toString", NodeToString);
+    clazz_methods.add(isolate, clazz, "valueOf", NodeValueOf);
 
 	Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
 	inst->SetInternalFieldCount(1);
@@ -1056,14 +1051,14 @@ void VariantObject::NodeToString(const FunctionCallbackInfo<Value>& args) {
 
 void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
-	Local<Context> ctx = isolate->GetCurrentContext();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
+
 	String::Value vname(isolate, name);
-	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
+    LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"valueOf";
 	if (_wcsicmp(id, L"__value") == 0) {
 		Local<Value> result = Variant2Value(isolate, self->value);
 		args.GetReturnValue().Set(result);
@@ -1079,44 +1074,25 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
 	else if (_wcsicmp(id, L"__proto__") == 0) {
 		Local<Function> func;
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
-		if (clazz.IsEmpty() || !clazz_template.Get(isolate)->GetFunction(ctx).ToLocal(&func)) args.GetReturnValue().SetNull();
-		else args.GetReturnValue().Set(func);
+        Local<Context> ctx = isolate->GetCurrentContext();
+        if (!clazz.IsEmpty() && clazz_template.Get(isolate)->GetFunction(ctx).ToLocal(&func)) {
+            args.GetReturnValue().Set(func);
+        }
+        else {
+            args.GetReturnValue().SetNull();
+        }
 	}
-	else if (_wcsicmp(id, L"clear") == 0) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeClear)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-	else if (_wcsicmp(id, L"assign") == 0) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeAssign)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-	else if (_wcsicmp(id, L"cast") == 0) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeCast)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-	else if (_wcsicmp(id, L"valueOf") == 0 ) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeValueOf)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-	else if (_wcsicmp(id, L"toString") == 0 || !*id) {
-		Local<Function> func;
-		if (FunctionTemplate::New(isolate, NodeToString)->GetFunction(ctx).ToLocal(&func)) {
-			args.GetReturnValue().Set(func);
-		}
-	}
-	else if (_wcsicmp(id, L"length") == 0) {
-		if ((self->value.vt & VT_ARRAY) != 0) {
-			args.GetReturnValue().Set((uint32_t)self->value.ArrayLength());
-		}
-	}
+    else if (_wcsicmp(id, L"length") == 0) {
+        if ((self->value.vt & VT_ARRAY) != 0) {
+            args.GetReturnValue().Set((uint32_t)self->value.ArrayLength());
+        }
+    }
+    else {
+        Local<Function> func;
+        if (clazz_methods.get(isolate, id, &func)) {
+            args.GetReturnValue().Set(func);
+        }
+    }
 }
 
 void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value>& args) {
@@ -1168,7 +1144,6 @@ Local<Object> VariantObject::NodeCreate(Isolate* isolate, const VARIANT& var) {
 	}
 	return self;
 }
-
 
 //-------------------------------------------------------------------------------------------------------
 

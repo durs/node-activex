@@ -1,6 +1,6 @@
 require('../activex');
 
-var path = require('path'); 
+var path = require('path');
 const assert = require('assert');
 
 var template_filename = path.join(__dirname, '../data/test.xltm');
@@ -13,8 +13,8 @@ var test_func_arg = 10;
 var com_obj, js_obj = {
     text: test_value,
     obj: { params: test_value },
-    arr: [ test_value, test_value, test_value ],
-    func: function(v) { return v*2; },
+    arr: [test_value, test_value, test_value],
+    func: function(v) { return v * 2; },
     func2: function(obj) { return obj.text; }
 };
 
@@ -90,14 +90,14 @@ describe("Excel with JS object", function() {
         assert.equal(wsh1.Name, 'Sheet1');
         assert.equal(wsh2.Name, 'Sheet1');
     });
-    
+
     it("cell access", function() {
         var wsh = wbk.Worksheets.Item(1);
-        wsh.Cells(1,1).Value = 'test';
-        var val = wsh.Cells(1,1).Value;
+        wsh.Cells(1, 1).Value = 'test';
+        var val = wsh.Cells(1, 1).Value;
         assert.equal(val, 'test');
     });
-    
+
     it("invoke test simple property", function() {
         if (wbk && com_obj) assert.equal(test_value3, wbk.Test(com_obj, 'text', 0, test_value3));
     });
@@ -117,7 +117,7 @@ describe("Excel with JS object", function() {
     it("range read, write with two dimension arrays", function() {
         if (wbk) {
             var wsh = wbk.Worksheets.Item(1);
-            wsh.Range("A1:B3").Value = [["A1","B1"],["A2","B2"],["A3","B3"]];
+            wsh.Range("A1:B3").Value = [["A1", "B1"], ["A2", "B2"], ["A3", "B3"]];
             const data = wsh.Range("A1:B3").Value.valueOf();
             assert(data instanceof Array);
             assert.equal(data.length, 3);
@@ -133,4 +133,13 @@ describe("Excel with JS object", function() {
         if (excel) excel.Quit();
     });
 
+    if (typeof global.gc === 'function') {
+        global.gc();
+        const mem_usage = process.memoryUsage().heapUsed / 1024;
+        it("check memory", function() {
+            global.gc();
+            const mem = process.memoryUsage().heapUsed / 1024;
+            if (mem > mem_usage) throw new Error(`used memory increased from ${mem_usage.toFixed(2)}Kb to ${mem.toFixed(2)}Kb`);
+        });
+    }
 });
