@@ -563,7 +563,8 @@ HRESULT STDMETHODCALLTYPE DispEnumImpl::Invoke(DISPID dispIdMember, REFIID riid,
                 if SUCCEEDED(hrcode) arr.Detach(pVarResult);
             }
         }
-        return hrcode; }
+        return hrcode; 
+        }
     case 2: {
         if (pVarResult) pVarResult->vt = VT_EMPTY;
         ULONG celt = (argcnt > 0) ? Variant2Int(args[argcnt - 1], (ULONG)1) : 1;
@@ -574,13 +575,12 @@ HRESULT STDMETHODCALLTYPE DispEnumImpl::Invoke(DISPID dispIdMember, REFIID riid,
         return ptr->Reset(); 
         }
     case 4: {
-        if (!pVarResult) hrcode = E_INVALIDARG;
-        std::auto_ptr<DispEnumImpl> disp;
-        if SUCCEEDED(hrcode) hrcode = ptr->Clone(&disp->ptr);
+        std::unique_ptr<DispEnumImpl> disp;
+        hrcode = pVarResult ? ptr->Clone(&disp->ptr) : E_INVALIDARG;
         if SUCCEEDED(hrcode) {
+            disp->AddRef();
             pVarResult->vt = VT_DISPATCH;
             pVarResult->pdispVal = disp.release();
-            pVarResult->pdispVal->AddRef();
         }
         return hrcode; }
     }
