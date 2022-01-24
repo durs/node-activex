@@ -286,6 +286,7 @@ inline HRESULT DispInvoke(IDispatch *disp, DISPID dispid, UINT argcnt = 0, VARIA
 	if (flags == DISPATCH_PROPERTYPUT) { // It`s a magic
 		params.cNamedArgs = 1;
 		params.rgdispidNamedArgs = &dispidNamed;
+		if (params.rgvarg && params.rgvarg->vt == VT_DISPATCH) flags = DISPATCH_PROPERTYPUTREF;
 	}
 	return disp->Invoke(dispid, IID_NULL, 0, flags, &params, ret, except, 0);
 }
