@@ -461,6 +461,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
 	Local<Context> ctx = isolate->GetCurrentContext();
 	bool isGetObject = false;
+	bool isGetAccessibleObject = false;
     int argcnt = args.Length();
     if (argcnt < 1) {
         isolate->ThrowException(InvalidArgumentsError(isolate));
@@ -484,6 +485,9 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 			}
 			if (opt->Get(ctx, v8str(isolate, "getobject")).ToLocal(&val)) {
 				if (v8val2bool(isolate, val, false)) isGetObject = true;
+			}
+			if (opt->Get(ctx, v8str(isolate, "getaccessibleobject")).ToLocal(&val)) {
+				if (v8val2bool(isolate, val, false)) isGetAccessibleObject = true;
 			}
 		}
     }
@@ -520,24 +524,28 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 		else {
 			name.assign((LPOLESTR)*vname, vname.length());
 
+			CComPtr<IUnknown> unk;
 			if (isGetObject)
 			{
-				CComPtr<IUnknown> unk;
 				hrcode = CoGetObject(name.c_str(), NULL, IID_IUnknown, (void**)&unk);
 				if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
-
 			} else {
-				CLSID clsid;
-				hrcode = CLSIDFromProgID(name.c_str(), &clsid);
-				if SUCCEEDED(hrcode) {
-					if ((options & option_activate) == 0) hrcode = E_FAIL;
-					else {
-						CComPtr<IUnknown> unk;
-						hrcode = GetActiveObject(clsid, NULL, &unk);
-						if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
-					}
-					if FAILED(hrcode) {
-						hrcode = disp.CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER);
+				if (isGetAccessibleObject)
+				{
+					hrcode = GetAccessibleObject(name.c_str(), unk);
+					if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
+				} else {
+					CLSID clsid;
+					hrcode = CLSIDFromProgID(name.c_str(), &clsid);
+					if SUCCEEDED(hrcode) {
+						if ((options & option_activate) == 0) hrcode = E_FAIL;
+						else {
+							hrcode = GetActiveObject(clsid, NULL, &unk);
+							if SUCCEEDED(hrcode) hrcode = unk->QueryInterface(&disp);
+						}
+						if FAILED(hrcode) {
+							hrcode = disp.CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER);
+						}
 					}
 				}
 			}

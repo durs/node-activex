@@ -6,6 +6,8 @@
 
 #include "stdafx.h"
 #include "disp.h"
+#include <oleacc.h>                  // for AccessibleObjectFromWindow
+#pragma comment(lib, "OleAcc.lib")   // for AccessibleObjectFromWindow
 
 const GUID CLSID_DispObjectImpl = { 0x9dce8520, 0x2efe, 0x48c0,{ 0xa0, 0xdc, 0x95, 0x1b, 0x29, 0x18, 0x72, 0xc0 } };
 
@@ -761,4 +763,30 @@ void WinaxSleep(const FunctionCallbackInfo<Value>& args) {
 	uint32_t ms = (args[0]->Uint32Value(ctx)).FromMaybe(0);
 	Sleep(ms);
 	args.GetReturnValue().SetUndefined();
+}
+
+// Get a COM pointer from a window found by it's text
+HRESULT GetAccessibleObject(const wchar_t* pszWindowText, CComPtr<IUnknown>& spIUnknown) {
+	struct ew {
+		static BOOL CALLBACK ecp(HWND hWnd, LPARAM lParam) {
+			wchar_t szWindowText[128];
+			if (GetWindowTextW(hWnd, szWindowText, _countof(szWindowText))) {
+				ewp* pparams = reinterpret_cast<ewp*>(lParam);
+				if (!wcscmp(szWindowText, pparams->pszWindowText)) {
+					pparams->hWnd = hWnd;
+					return FALSE;
+				}
+			}
+			return TRUE;
+		}
+		struct ewp {
+			const wchar_t* pszWindowText;
+			HWND hWnd;
+		};
+	};
+	ew::ewp params{ pszWindowText, nullptr };
+	EnumChildWindows(GetDesktopWindow(), ew::ecp, reinterpret_cast<LPARAM>(&params));
+	if (params.hWnd == nullptr) return _HRESULT_TYPEDEF_(0x80070057L); // ERROR_INVALID_PARAMETER
+	return AccessibleObjectFromWindow(params.hWnd, OBJID_NATIVEOM, IID_IUnknown,
+	                                  reinterpret_cast<void**>(&spIUnknown));
 }
