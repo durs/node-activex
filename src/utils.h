@@ -523,3 +523,4 @@ public:
 void WinaxSleep(const FunctionCallbackInfo<Value>& args);
 
 //-------------------------------------------------------------------------------------------------------
+HRESULT GetAccessibleObject(const wchar_t* pszWindowText, CComPtr<IUnknown>& spIUnknown);
