@@ -9,9 +9,9 @@
 
  * Using optional parameters on constructor call    
 ``` js 
-var con = new ActiveXObject("ADODB.Connection", {
-	activate: false, // Allow activate existance object instance, false by default
-	async: true, // Allow asynchronius calls, true by default (not implemented, for future usage)
+var con = new ActiveXObject("Object.Name", {
+	activate: false, // Allow activate existance object instance (through CoGetObject), false by default
+	getobject: false, // Allow using name of the file in the ROT (through GetAccessibleObject), false by default
 	type: true	// Allow using type information, true by default
 });
 ```
@@ -303,4 +303,6 @@ mocha --expose-gc test
 
 * [durs](https://github.com/durs)
 * [somanuell](https://github.com/somanuell)
+* [Daniel-Userlane](https://github.com/Daniel-Userlane)
+* [alexeygrinevich](https://github.com/alexeygrinevich)
 
