@@ -195,6 +195,7 @@ public:
 
     inline HRESULT CoCreateInstance(REFCLSID rclsid, LPUNKNOWN pUnkOuter = NULL, DWORD dwClsContext = CLSCTX_ALL) {
         Release();
+		HRESULT hr = ::CoCreateInstance(rclsid, pUnkOuter, dwClsContext, __uuidof(IUnknown), (void**)&p);
         return ::CoCreateInstance(rclsid, pUnkOuter, dwClsContext, __uuidof(T), (void**)&p);
     }
 
