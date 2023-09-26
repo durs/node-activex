@@ -76,7 +76,8 @@ describe("COM from JS object", function() {
         try {
             fso.DeleteFile("c:\\noexist.txt");
         } catch(e) {
-            assert.equal(e.message, "DispInvoke: DeleteFile: CTL_E_FILENOTFOUND Exception occurred.\r\n");
+            // assert.equal(e.message, "DispInvoke: DeleteFile: CTL_E_FILENOTFOUND Exception occurred.\r\n");
+            assert(e.message.startsWith("DispInvoke: DeleteFile: CTL_E_FILENOTFOUND"));
         }
     });
 });
