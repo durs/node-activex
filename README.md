@@ -271,7 +271,7 @@ This is a key drawback of v8 engine compared to MS. Consider an example:
     if( a.Prop )
     {
         // If 'Prop' is a dynamic property (i.e. it is not defined in TypeInfo and
-        // not marked explicitly as a property, then never got here. Even if a.Prop is null or false.
+        // not marked explicitly as a property, then execution never gets here. Even if a.Prop is null or false.
     }
 ```
 

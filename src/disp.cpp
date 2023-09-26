@@ -112,23 +112,27 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 			else {
 				if (disp_info->is_property()) opt |= option_property;
 				is_property_simple = disp_info->is_property_simple();
+				
+				if (disp->bManaged && tag && *tag && wcscmp(tag, L"ToString")==0)
+				{
+					// .NET ToString is reported as a property while we normally use it via .ToString() - i.e. as a method. 
+					is_property_simple = false;
+				}
+
 			}
 		}
-		else {
-			// We were unable to figure out if it is a property or method.
-			// This is typical for .NET objects. So we may check if it is actually
-			// a .NET object by checking presense of IReflect interface and then asking
-			CComPtr<IDispatch> preflect;
-			HRESULT hr = disp->ptr->QueryInterface(IID_IReflect, (void**)&preflect);
+		else if ( disp->bManaged && tag && *tag && wcscmp(tag, L"length") == 0) {
 			DISPID lenprop;
-
-			if (SUCCEEDED(hr) && this_prop && SUCCEEDED(disp->FindProperty(L"length", &lenprop)) )
+			if ( SUCCEEDED(disp->FindProperty(L"length", &lenprop)) )
 			{
 
 				// If we have 'IReflect' and '.length' - assume it is .NET JS Array or JS Object
 				is_property_simple = true;
 			}
-
+		}
+		else if (disp->bManaged && tag && *tag && index>=0 ) {
+			// jsarray[x]
+			is_property_simple = true;
 		}
 	}
 
@@ -1042,7 +1046,8 @@ void VariantObject::NodeValueOf(const FunctionCallbackInfo<Value>& args) {
 		isolate->ThrowException(DispErrorInvalid(isolate));
 		return;
 	}
-	Local<Value> result = Variant2Value(isolate, self->value, true);
+	// Last parameter false because valueOf should return primitive value
+	Local<Value> result = Variant2Value(isolate, self->value, false);
 	args.GetReturnValue().Set(result);
 }
 
@@ -1066,7 +1071,7 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
 	}
 
 	String::Value vname(isolate, name);
-    LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"valueOf";
+	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"valueOf";
 	if (_wcsicmp(id, L"__value") == 0) {
 		Local<Value> result = Variant2Value(isolate, self->value);
 		args.GetReturnValue().Set(result);

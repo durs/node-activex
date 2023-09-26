@@ -210,29 +210,48 @@ public:
 #endif
 //-------------------------------------------------------------------------------------------------------
 
-Local<String> GetWin32ErroroMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2 = 0, LPCOLESTR desc = 0);
+Local<String> GetWin32ErrorMessage(Isolate *isolate, HRESULT hrcode, LPCOLESTR msg, LPCOLESTR msg2 = 0, LPCOLESTR desc = 0);
 
 inline Local<Value> Win32Error(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0) {
-	auto err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg));
+	auto err = Exception::Error(GetWin32ErrorMessage(isolate, hrcode, id, msg));
 	auto obj = Local<Object>::Cast(err);
 	obj->Set(isolate->GetCurrentContext(), v8str(isolate, "errno"), Integer::New(isolate, hrcode));
 	return err;
 }
 
+void GetScodeString(HRESULT hr, wchar_t* buf, int bufSize);
+
 inline Local<Value> DispError(Isolate *isolate, HRESULT hrcode, LPCOLESTR id = 0, LPCOLESTR msg = 0, EXCEPINFO *except = 0) {
 	Local<Context> ctx = isolate->GetCurrentContext();
 	CComBSTR desc;
-    CComPtr<IErrorInfo> errinfo;
+	CComPtr<IErrorInfo> errinfo;
+
+	std::wstring emsg;
+	emsg.reserve(1024);
+	if (except && except->scode) {
+		wchar_t wc[1024];
+		GetScodeString(except->scode, wc, sizeof(wc) / sizeof(wc[0]));
+		emsg += msg;
+		emsg += L": ";
+		emsg += wc;
+	}
+	else {
+		emsg = std::wstring(msg);
+	}
+
     HRESULT hr = GetErrorInfo(0, &errinfo);
     if (hr == S_OK) errinfo->GetDescription(&desc);
-	auto err = Exception::Error(GetWin32ErroroMessage(isolate, hrcode, id, msg, desc));
+	auto err = Exception::Error(GetWin32ErrorMessage(isolate, hrcode, id, emsg.c_str(), desc));
 	auto obj = Local<Object>::Cast(err);
 	obj->Set(ctx, v8str(isolate, "errno"), Integer::New(isolate, hrcode));
 	if (except) {
 		if (except->scode != 0) obj->Set(ctx, v8str(isolate, "code"), Integer::New(isolate, except->scode));
 		else if (except->wCode != 0) obj->Set(ctx, v8str(isolate, "code"), Integer::New(isolate, except->wCode));
 		if (except->bstrSource != 0) obj->Set(ctx, v8str(isolate, "source"), v8str(isolate, except->bstrSource));
-		if (except->bstrDescription != 0) obj->Set(ctx, v8str(isolate, "description"), v8str(isolate, except->bstrDescription));
+		if (except->bstrDescription != 0) {
+			obj->Set(ctx, v8str(isolate, "message"), v8str(isolate, except->bstrDescription));
+			obj->Set(ctx, v8str(isolate, "description"), v8str(isolate, except->bstrDescription));
+		}
 	}
 	return err;
 }

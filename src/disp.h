@@ -78,8 +78,11 @@ bool TypeLibEnumerate(ITypeLib *typelib, int mode, T process) {
 	return cnt > 0;
 }
 
+class DispInfo;
+
 template<typename T>
-bool TypeInfoEnumerate(IDispatch *disp, int mode, T process) {
+bool TypeInfoEnumerate(DispInfo* dispInfo, int mode, T process) {
+	IDispatch* disp = dispInfo->ptr;
 	UINT i, cnt;
 	CComPtr<ITypeLib> prevtypelib;
 	if (!disp || FAILED(disp->GetTypeInfoCount(&cnt))) cnt = 0;
@@ -91,6 +94,21 @@ bool TypeInfoEnumerate(IDispatch *disp, int mode, T process) {
 		UINT typeindex;
 		CComPtr<ITypeLib> typelib;
 		if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
+
+			// Check if typelib is managed
+			CComPtr<ITypeLib2> typeLib2;
+
+			if (SUCCEEDED(typelib->QueryInterface(IID_ITypeLib2, (void**)&typeLib2)) )
+			{
+				// {90883F05-3D28-11D2-8F17-00A0C9A6186D}
+				const GUID GUID_ExportedFromComPlus = { 0x90883F05, 0x3D28, 0x11D2, { 0x8F, 0x17, 0x00, 0xA0, 0xC9, 0xA6, 0x18, 0x6D } };
+
+				CComVariant cv;
+				if (SUCCEEDED(typeLib2->GetCustData(GUID_ExportedFromComPlus, &cv)))
+				{
+					dispInfo->bManaged = true;
+				}
+			}
 
 			// Enumerate all types in library types
 			// May be very slow! need a special method
@@ -104,7 +122,7 @@ bool TypeInfoEnumerate(IDispatch *disp, int mode, T process) {
 			CComPtr<ITypeInfo> tinfo;
 			if (typelib->GetTypeInfo(typeindex, &tinfo) == S_OK) {
 				TypeInfoPrepare<T>(tinfo, mode, process);
-			}			
+			}
 		}
 
 		// Process types
@@ -121,6 +139,7 @@ public:
 	CComPtr<IDispatch> ptr;
     std::wstring name;
 	int options;
+	bool bManaged;
 
 	struct type_t { 
 		DISPID dispid; 
@@ -137,7 +156,7 @@ public:
 	types_by_dispid_t types_by_dispid;
 
     inline DispInfo(IDispatch *disp, const std::wstring &nm, int opt, std::shared_ptr<DispInfo> *parnt = nullptr)
-        : ptr(disp), options(opt), name(nm)
+        : ptr(disp), options(opt), name(nm), bManaged(false)
     { 
         if (parnt) parent = *parnt;
         if ((options & option_type) != 0)
@@ -160,7 +179,7 @@ public:
 
     template<typename T>
     bool Enumerate(int mode, T process) {
-		return TypeInfoEnumerate((IDispatch*)ptr, mode, process);
+		return TypeInfoEnumerate(this, mode, process);
     }
 
 	inline bool GetTypeInfo(const DISPID dispid, type_ptr &info) {
