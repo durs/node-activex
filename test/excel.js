@@ -70,6 +70,15 @@ describe("COM from JS object", function() {
     it("call method with object argument", function() {
         if (com_obj) assert.equal(com_obj.func2(com_obj), js_obj.text);
     });
+    
+    it("COM error message", function() {
+        var fso = new ActiveXObject("Scripting.FileSystemObject"); 
+        try {
+            fso.DeleteFile("c:\\noexist.txt");
+        } catch(e) {
+            assert.equal(e.message, "DispInvoke: DeleteFile: CTL_E_FILENOTFOUND Exception occurred.\r\n");
+        }
+    });
 });
 
 describe("Excel with JS object", function() {
