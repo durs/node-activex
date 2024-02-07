@@ -1,5 +1,7 @@
 #pragma once
 
+#define NOMINMAX // To remove conflicts with recent v8 code std::numeric_limits<int>::max()
+
 #include <SDKDDKVer.h>
 
 // Windows Header Files:
