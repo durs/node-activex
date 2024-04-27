@@ -123,8 +123,7 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 		}
 		else if ( disp->bManaged && tag && *tag && wcscmp(tag, L"length") == 0) {
 			DISPID lenprop;
-			if ( SUCCEEDED(disp->FindProperty(L"length", &lenprop)) )
-			{
+			if SUCCEEDED(disp->FindProperty((LPOLESTR)L"length", &lenprop)) {
 
 				// If we have 'IReflect' and '.length' - assume it is .NET JS Array or JS Object
 				is_property_simple = true;
@@ -377,7 +376,7 @@ void DispObject::initTypeInfo(Isolate *isolate) {
 	Local<v8::Object> _items = v8::Array::New(isolate);
 	Local<v8::Object> _methods = v8::Object::New(isolate);
 	Local<v8::Object> _vars = v8::Object::New(isolate);
-	disp->Enumerate(3, [isolate, &_items, &_vars, &_methods, &index](ITypeInfo *info, FUNCDESC *func, VARDESC *var) {
+	disp->Enumerate(1+2/*functions and variables*/, nullptr, [isolate, &_items, &_vars, &_methods, &index](ITypeInfo *info, FUNCDESC *func, VARDESC *var) {
 		Local<Context> ctx = isolate->GetCurrentContext();
         CComBSTR name;
 		MEMBERID memid = func != nullptr ? func->memid : var->memid;
@@ -422,7 +421,7 @@ void DispObject::NodeInit(const Local<Object> &target, Isolate* isolate, Local<C
     clazz_methods.add(isolate, clazz, "toString", NodeToString);
     clazz_methods.add(isolate, clazz, "valueOf", NodeValueOf);
 
-    Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
+    Local<ObjectTemplate> inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
     inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
     inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
@@ -586,7 +585,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 		isolate->ThrowException(DispError(isolate, hrcode, L"CreateInstance", name.c_str()));
 	}
 	else {
-		Local<Object> &self = args.This();
+		Local<Object> self = args.This();
 		DispInfoPtr ptr(new DispInfo(disp, name, options));
 		(new DispObject(ptr, name))->Wrap(self);
 		args.GetReturnValue().Set(self);
@@ -601,7 +600,7 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
 		return;
 	}
 	String::Value vname(isolate, name);
-	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"valueOf";
+	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : (LPOLESTR)L"valueOf";
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
     if (_wcsicmp(id, L"__value") == 0) {
         Local<Value> result;
@@ -701,7 +700,7 @@ void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCal
 		return;
 	}
 	String::Value vname(isolate, name);
-	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"";
+	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : (LPOLESTR)L"";
 	NODE_DEBUG_FMT2("DispObject '%S.%S' set", self->name.c_str(), id);
     self->set(id, -1, value, args);
 }
@@ -758,7 +757,7 @@ void DispObject::NodeRelease(const FunctionCallbackInfo<Value>& args) {
 	Isolate *isolate = args.GetIsolate();
     int rcnt = 0, argcnt = args.Length();
     for (int argi = 0; argi < argcnt; argi++) {
-        auto &obj = args[argi];
+        auto obj = args[argi];
         if (obj->IsObject()) {
             auto disp_obj = Local<Object>::Cast(obj);
             DispObject *disp = DispObject::Unwrap<DispObject>(disp_obj);
@@ -785,7 +784,8 @@ void DispObject::NodeConnectionPoints(const FunctionCallbackInfo<Value>& args) {
     // prepare connecton points from arguments
     int argcnt = args.Length();
     if (argcnt >= 1) {
-        if (Value2Unknown(isolate, args[0], (IUnknown**)&ptr)) {
+		auto arg = args[0];
+        if (Value2Unknown(isolate, arg, (IUnknown**)&ptr)) {
             if SUCCEEDED(ptr->QueryInterface(&cp_cont)) {
                 cp_cont->EnumConnectionPoints(&cp_enum);
             }
@@ -963,7 +963,7 @@ void VariantObject::NodeInit(const Local<Object> &target, Isolate* isolate, Loca
     clazz_methods.add(isolate, clazz, "toString", NodeToString);
     clazz_methods.add(isolate, clazz, "valueOf", NodeValueOf);
 
-	Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
+	Local<ObjectTemplate> inst = clazz->InstanceTemplate();
 	inst->SetInternalFieldCount(1);
     inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
     inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
@@ -996,7 +996,7 @@ Local<Object> VariantObject::NodeCreateInstance(const FunctionCallbackInfo<Value
 
 void VariantObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	Isolate *isolate = args.GetIsolate();
-	Local<Object> &self = args.This();
+	Local<Object> self = args.This();
 	(new VariantObject(args))->Wrap(self);
 	args.GetReturnValue().Set(self);
 }
@@ -1071,7 +1071,7 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
 	}
 
 	String::Value vname(isolate, name);
-	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : L"valueOf";
+	LPOLESTR id = (vname.length() > 0) ? (LPOLESTR)*vname : (LPOLESTR)L"valueOf";
 	if (_wcsicmp(id, L"__value") == 0) {
 		Local<Value> result = Variant2Value(isolate, self->value);
 		args.GetReturnValue().Set(result);
@@ -1257,7 +1257,7 @@ void ConnectionPointObject::NodeInit(const Local<Object> &target, Isolate* isola
 	NODE_SET_PROTOTYPE_METHOD(clazz, "unadvise", NodeUnadvise);
 	NODE_SET_PROTOTYPE_METHOD(clazz, "getMethods", NodeConnectionPointMethods);
 
-    Local<ObjectTemplate> &inst = clazz->InstanceTemplate();
+    Local<ObjectTemplate> inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
 
     inst_template.Reset(isolate, inst);
@@ -1268,7 +1268,7 @@ void ConnectionPointObject::NodeInit(const Local<Object> &target, Isolate* isola
 
 void ConnectionPointObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
     Isolate *isolate = args.GetIsolate();
-    Local<Object> &self = args.This();
+    Local<Object> self = args.This();
     (new ConnectionPointObject(args))->Wrap(self);
     args.GetReturnValue().Set(self);
 }

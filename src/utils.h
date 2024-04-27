@@ -395,8 +395,10 @@ public:
 	VarArguments(Isolate *isolate, const FunctionCallbackInfo<Value> &args) {
 		int argcnt = args.Length();
 		items.resize(argcnt);
-		for (int i = 0; i < argcnt; i ++)
-			Value2Variant(isolate, args[argcnt - i - 1], items[i]);
+		for (int i = 0; i < argcnt; i++) {
+			auto arg = args[argcnt - i - 1];
+			Value2Variant(isolate, arg, items[i]);
+		}
 	}
     inline bool IsDefault() {
         if (items.size() != 1) return false;

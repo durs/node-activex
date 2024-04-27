@@ -78,61 +78,6 @@ bool TypeLibEnumerate(ITypeLib *typelib, int mode, T process) {
 	return cnt > 0;
 }
 
-class DispInfo;
-
-template<typename T>
-bool TypeInfoEnumerate(DispInfo* dispInfo, int mode, T process) {
-	IDispatch* disp = dispInfo->ptr;
-	UINT i, cnt;
-	CComPtr<ITypeLib> prevtypelib;
-	if (!disp || FAILED(disp->GetTypeInfoCount(&cnt))) cnt = 0;
-	else for (i = 0; i < cnt; i++) {
-		CComPtr<ITypeInfo> info;
-		if (disp->GetTypeInfo(i, 0, &info) != S_OK) continue;
-
-		// Query type library
-		UINT typeindex;
-		CComPtr<ITypeLib> typelib;
-		if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
-
-			// Check if typelib is managed
-			CComPtr<ITypeLib2> typeLib2;
-
-			if (SUCCEEDED(typelib->QueryInterface(IID_ITypeLib2, (void**)&typeLib2)) )
-			{
-				// {90883F05-3D28-11D2-8F17-00A0C9A6186D}
-				const GUID GUID_ExportedFromComPlus = { 0x90883F05, 0x3D28, 0x11D2, { 0x8F, 0x17, 0x00, 0xA0, 0xC9, 0xA6, 0x18, 0x6D } };
-
-				CComVariant cv;
-				if (SUCCEEDED(typeLib2->GetCustData(GUID_ExportedFromComPlus, &cv)))
-				{
-					dispInfo->bManaged = true;
-				}
-			}
-
-			// Enumerate all types in library types
-			// May be very slow! need a special method
-			/*
-			if (typelib != prevtypelib) {
-				TypeLibEnumerate<T>(typelib, mode, process);
-				prevtypelib.Attach(typelib.Detach());
-			}
-			*/
-
-			CComPtr<ITypeInfo> tinfo;
-			if (typelib->GetTypeInfo(typeindex, &tinfo) == S_OK) {
-				TypeInfoPrepare<T>(tinfo, mode, process);
-			}
-		}
-
-		// Process types
-		else {
-			TypeInfoPrepare<T>(info, mode, process);
-		}
-	}
-	return cnt > 0;
-}
-
 class DispInfo {
 public:
 	std::weak_ptr<DispInfo> parent;
@@ -164,7 +109,7 @@ public:
     }
 
     void Prepare(IDispatch *disp) {
-        Enumerate(1, [this](ITypeInfo *info, FUNCDESC *func, VARDESC *var) {
+        Enumerate(1/*functions only*/, &bManaged, [this](ITypeInfo *info, FUNCDESC *func, VARDESC *var) {
 			type_ptr &ptr = this->types_by_dispid[func->memid];
 			if (!ptr) ptr.reset(new type_t(func->memid, func->invkind));
 			else ptr->kind |= func->invkind;
@@ -176,11 +121,6 @@ public:
         bool prepared = types_by_dispid.size() > 3; // QueryInterface, AddRef, Release
         if (prepared) options |= option_prepared;
 	}
-
-    template<typename T>
-    bool Enumerate(int mode, T process) {
-		return TypeInfoEnumerate(this, mode, process);
-    }
 
 	inline bool GetTypeInfo(const DISPID dispid, type_ptr &info) {
 		if ((options & option_prepared) == 0) return false;
@@ -215,6 +155,56 @@ public:
         HRESULT hrcode = DispInvoke(ptr, dispid, argcnt, args, value, DISPATCH_METHOD, except);
         return hrcode;
     }
+
+	template<typename T>
+	bool Enumerate(int mode, bool* checkManaged, T process = nullptr) {
+		UINT i, cnt;
+		CComPtr<ITypeLib> prevtypelib;
+		if (!ptr || FAILED(ptr->GetTypeInfoCount(&cnt))) cnt = 0;
+		else for (i = 0; i < cnt; i++) {
+			CComPtr<ITypeInfo> info;
+			if (ptr->GetTypeInfo(i, 0, &info) != S_OK) continue;
+
+			// Query type library
+			UINT typeindex;
+			CComPtr<ITypeLib> typelib;
+			if (info->GetContainingTypeLib(&typelib, &typeindex) == S_OK) {
+
+				// Check if typelib is managed
+				if (checkManaged != nullptr && !*checkManaged) {
+					CComPtr<ITypeLib2> typeLib2;
+					if (SUCCEEDED(typelib->QueryInterface(IID_ITypeLib2, (void**)&typeLib2))) {
+
+						// {90883F05-3D28-11D2-8F17-00A0C9A6186D}
+						static const GUID GUID_ExportedFromComPlus = { 0x90883F05, 0x3D28, 0x11D2, { 0x8F, 0x17, 0x00, 0xA0, 0xC9, 0xA6, 0x18, 0x6D } };
+
+						CComVariant cv;
+						if (SUCCEEDED(typeLib2->GetCustData(GUID_ExportedFromComPlus, &cv))) {
+							*checkManaged = true;
+						}
+					}
+				}
+
+				// Enumerate all types in library types
+				// May be very slow! need a special method
+				// if (typelib != prevtypelib) {
+				//     TypeLibEnumerate<T>(typelib, mode, process);
+				//	   prevtypelib.Attach(typelib.Detach());
+				// }
+
+				CComPtr<ITypeInfo> tinfo;
+				if (typelib->GetTypeInfo(typeindex, &tinfo) == S_OK) {
+					TypeInfoPrepare<T>(tinfo, mode, process);
+				}
+			}
+
+			// Process types
+			else {
+				TypeInfoPrepare<T>(info, mode, process);
+			}
+		}
+		return cnt > 0;
+	}
 };
 
 typedef std::shared_ptr<DispInfo> DispInfoPtr;
@@ -299,7 +289,6 @@ private:
 	HRESULT prepare();
 };
 
-
 class VariantObject : public NodeObject
 {
 public:
@@ -318,7 +307,7 @@ public:
 	}
 	static VariantObject *GetInstanceOf(Isolate *isolate, const Local<Object> &obj) {
 		Local<FunctionTemplate> clazz = clazz_template.Get(isolate);
-		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return false;
+		if (clazz.IsEmpty() || !clazz->HasInstance(obj)) return nullptr;
 		return Unwrap<VariantObject>(obj);
 	}
 	static bool GetValueOf(Isolate *isolate, const Local<Object> &obj, VARIANT &value) {
