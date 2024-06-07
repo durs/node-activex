@@ -1,4 +1,4 @@
-declare module 'node-activex' {
+declare module 'winax' {
   export class Object {
     constructor(id: string, options?: ActiveXOptions);
     // Define properties typically found on COM objects
