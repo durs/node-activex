@@ -27,5 +27,4 @@ var listFileTypes = (function(){
     }
 })()
 
-
-listFileTypes("C:\\temp")
+listFileTypes("./")
