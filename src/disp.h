@@ -251,19 +251,38 @@ private:
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
 	static void NodeRelease(const FunctionCallbackInfo<Value> &args);
 	static void NodeCast(const FunctionCallbackInfo<Value> &args);
-    static void NodeGet(Local<Name> name, const PropertyCallbackInfo<Value> &args);
-	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
-	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
-	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+    static void NodeGet(Local<Name> name, const PropertyCallbackInfoGetter &args);
+	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfoSetter &args);
+	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter&args);
+	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter &args);
 	static void NodeCall(const FunctionCallbackInfo<Value> &args);
+
+#ifdef NODE_INTERCEPTED
+	static inline Intercepted InterceptedNodeGet(Local<Name> name, const PropertyCallbackInfoGetter& args) {
+		NodeGet(name, args);
+		return Intercepted::kYes;
+	}
+	static inline Intercepted InterceptedNodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfoSetter& args) {
+		NodeSet(name, value, args);
+		return Intercepted::kYes;
+	}
+	static inline Intercepted InterceptedNodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter& args) {
+		NodeGetByIndex(index, args);
+		return Intercepted::kYes;
+	}
+	static inline Intercepted InterceptedNodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter& args) {
+		NodeSetByIndex(index, value, args);
+		return Intercepted::kYes;
+	}
+#endif
 
     static void NodeConnectionPoints(const FunctionCallbackInfo<Value> &args);
     static void PeakAndDispatchMessages(const FunctionCallbackInfo<Value> &args);
 
 protected:
 	bool release();
-	bool get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args);
-	bool set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args);
+	bool get(LPOLESTR tag, LONG index, const PropertyCallbackInfoGetter &args);
+	bool set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfoSetter &args);
 	void call(Isolate *isolate, const FunctionCallbackInfo<Value> &args);
 
 	HRESULT valueOf(Isolate *isolate, VARIANT &value, bool simple);
@@ -326,12 +345,29 @@ public:
 	static void NodeCast(const FunctionCallbackInfo<Value> &args);
 	static void NodeValueOf(const FunctionCallbackInfo<Value> &args);
 	static void NodeToString(const FunctionCallbackInfo<Value> &args);
-	static void NodeGet(Local<Name> name, const PropertyCallbackInfo<Value> &args);
-	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value> &args);
-	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value> &args);
-	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value> &args);
+	static void NodeGet(Local<Name> name, const PropertyCallbackInfoGetter &args);
+	static void NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfoSetter&args);
+	static void NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter&args);
+	static void NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter&args);
 
-
+#ifdef NODE_INTERCEPTED
+	static inline Intercepted InterceptedNodeGet(Local<Name> name, const PropertyCallbackInfoGetter& args) {
+		NodeGet(name, args);
+		return Intercepted::kYes;
+	}
+	static inline Intercepted InterceptedNodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfoSetter& args) {
+		NodeSet(name, value, args);
+		return Intercepted::kYes;
+	}
+	static inline Intercepted InterceptedNodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter& args) {
+		NodeGetByIndex(index, args);
+		return Intercepted::kYes;
+	}
+	static inline Intercepted InterceptedNodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter& args) {
+		NodeSetByIndex(index, value, args);
+		return Intercepted::kYes;
+	}
+#endif
 
 private:
 	CComVariant value, pvalue;

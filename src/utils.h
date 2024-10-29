@@ -17,9 +17,18 @@
 #endif
 
 #ifdef NODE_BOOL_ISOLATE
-#define NODE_BOOL(isolate, v) v->BooleanValue(isolate)
+	#define NODE_BOOL(isolate, v) v->BooleanValue(isolate)
 #else
-#define NODE_BOOL(isolate, v) v->BooleanValue(isolate->GetCurrentContext()).FromMaybe(false)
+	#define NODE_BOOL(isolate, v) v->BooleanValue(isolate->GetCurrentContext()).FromMaybe(false)
+#endif
+
+#if (V8_MAJOR_VERSION >= 12)
+#define NODE_INTERCEPTED
+typedef PropertyCallbackInfo<Value> PropertyCallbackInfoGetter;
+typedef PropertyCallbackInfo<void> PropertyCallbackInfoSetter;
+#else
+typedef PropertyCallbackInfo<Value> PropertyCallbackInfoGetter;
+typedef PropertyCallbackInfo<Value> PropertyCallbackInfoSetter;
 #endif
 
 #ifdef NODE_DEBUG

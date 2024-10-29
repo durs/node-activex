@@ -1,6 +1,9 @@
 #pragma once
 
-#define NOMINMAX // To remove conflicts with recent v8 code std::numeric_limits<int>::max()
+// To remove conflicts with recent v8 code std::numeric_limits<int>::max()
+#ifndef NOMINMAX
+#define NOMINMAX 
+#endif
 
 #include <SDKDDKVer.h>
 

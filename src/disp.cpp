@@ -66,7 +66,7 @@ bool DispObject::release() {
 	return true;
 }
 
-bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value> &args) {
+bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfoGetter &args) {
 	Isolate *isolate = args.GetIsolate();
 	if (!is_prepared()) prepare();
     if (!disp) {
@@ -168,7 +168,7 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfo<Value>
 	return true;
 }
 
-bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfo<Value> &args) {
+bool DispObject::set(LPOLESTR tag, LONG index, const Local<Value> &value, const PropertyCallbackInfoSetter &args) {
 	Isolate *isolate = args.GetIsolate();
 	if (!is_prepared()) prepare();
     if (!disp) {
@@ -423,8 +423,15 @@ void DispObject::NodeInit(const Local<Object> &target, Isolate* isolate, Local<C
 
     Local<ObjectTemplate> inst = clazz->InstanceTemplate();
     inst->SetInternalFieldCount(1);
-    inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
-    inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
+
+#ifdef NODE_INTERCEPTED
+    inst->SetHandler(NamedPropertyHandlerConfiguration(InterceptedNodeGet, InterceptedNodeSet));
+    inst->SetHandler(IndexedPropertyHandlerConfiguration(InterceptedNodeGetByIndex, InterceptedNodeSetByIndex));
+#else
+	inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
+	inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
+#endif
+
     inst->SetCallAsFunctionHandler(NodeCall);
 	inst->SetNativeDataProperty(v8str(isolate, "__id"), NodeGet);
 	inst->SetNativeDataProperty(v8str(isolate, "__value"), NodeGet);
@@ -592,7 +599,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 	}
 }
 
-void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
+void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& args) {
     Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
@@ -681,7 +688,7 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& ar
 	}
 }
 
-void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value>& args) {
+void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter& args) {
     Isolate *isolate = args.GetIsolate();
     DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
@@ -692,7 +699,7 @@ void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value
     self->get(0, index, args);
 }
 
-void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
+void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfoSetter& args) {
     Isolate *isolate = args.GetIsolate();
 	DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
@@ -705,7 +712,7 @@ void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCal
     self->set(id, -1, value, args);
 }
 
-void DispObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
+void DispObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter& args) {
     Isolate *isolate = args.GetIsolate();
     DispObject *self = DispObject::Unwrap<DispObject>(args.This());
 	if (!self) {
@@ -965,8 +972,14 @@ void VariantObject::NodeInit(const Local<Object> &target, Isolate* isolate, Loca
 
 	Local<ObjectTemplate> inst = clazz->InstanceTemplate();
 	inst->SetInternalFieldCount(1);
+
+#ifdef NODE_INTERCEPTED
+	inst->SetHandler(NamedPropertyHandlerConfiguration(InterceptedNodeGet, InterceptedNodeSet));
+	inst->SetHandler(IndexedPropertyHandlerConfiguration(InterceptedNodeGetByIndex, InterceptedNodeSetByIndex));
+#else
     inst->SetHandler(NamedPropertyHandlerConfiguration(NodeGet, NodeSet));
     inst->SetHandler(IndexedPropertyHandlerConfiguration(NodeGetByIndex, NodeSetByIndex));
+#endif
     //inst->SetCallAsFunctionHandler(NodeCall);
 	//inst->SetNativeDataProperty(v8str(isolate, "__id"), NodeGet);
 
@@ -1062,7 +1075,7 @@ void VariantObject::NodeToString(const FunctionCallbackInfo<Value>& args) {
 	args.GetReturnValue().Set(result);
 }
 
-void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
@@ -1108,7 +1121,7 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfo<Value>&
     }
 }
 
-void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
@@ -1128,7 +1141,7 @@ void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfo<Va
 	args.GetReturnValue().Set(result);
 }
 
-void VariantObject::NodeSet(Local<Name> name, Local<Value> val, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeSet(Local<Name> name, Local<Value> val, const PropertyCallbackInfoSetter& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
@@ -1138,7 +1151,7 @@ void VariantObject::NodeSet(Local<Name> name, Local<Value> val, const PropertyCa
 	isolate->ThrowException(DispError(isolate, E_NOTIMPL));
 }
 
-void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfo<Value>& args) {
+void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter& args) {
 	Isolate *isolate = args.GetIsolate();
 	VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
 	if (!self) {
