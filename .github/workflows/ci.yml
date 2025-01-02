@@ -11,6 +11,8 @@ jobs:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      # https://community.chocolatey.org/packages?q=Excel
+      - run: choco install office365proplus
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
