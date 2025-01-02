@@ -11,15 +11,14 @@ jobs:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      # https://community.chocolatey.org/packages?q=Excel
-      - run: choco install office365proplus
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
       - run: npm run build --if-present
-      - run: |
-          npm install -g mocha
-          # mocha --expose-gc test
+      # https://community.chocolatey.org/packages?q=Excel
+      - name: "Installing Office 365 takes about 5 minutes..."
+        run: choco install office365proplus
+      - run: npm install -g mocha && mocha --expose-gc test
       - run: npm test
