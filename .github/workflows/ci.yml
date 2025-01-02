@@ -19,5 +19,5 @@ jobs:
       - run: npm run build --if-present
       - run: |
           npm install -g mocha
-          mocha --expose-gc test
+          # mocha --expose-gc test
       - run: npm test
