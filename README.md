@@ -176,6 +176,28 @@ const data = wsh.Range("C3:E4").Value.valueOf();
 console.log("Cell E4 value is", data[1][2]);
 ```
 
+## TypeScript
+Your `tsconfig.json` needs at least the following configuration:
+
+1. [`moduleResolution`](https://www.typescriptlang.org/tsconfig/#moduleResolution) needs to be something other than `classic`. Depending on your `target` and `module` this might be the default. For example:
+```json
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "nodenext"
+	}
+}
+```
+
+2. [`lib`](https://www.typescriptlang.org/tsconfig/#lib) needs to _**exclude**_ `ScriptHost`. It contains a conflicting global `ActiveXObject` type and is included by default. For example:
+```json
+{
+	"compilerOptions": {
+		"lib": [ "ESNext" ]
+	}
+}
+```
+
 # Tutorial and Examples
 
 - [examples/ado.js](https://github.com/durs/node-activex/blob/master/examples/ado.js)
@@ -305,4 +327,3 @@ mocha --expose-gc test
 * [somanuell](https://github.com/somanuell)
 * [Daniel-Userlane](https://github.com/Daniel-Userlane)
 * [alexeygrinevich](https://github.com/alexeygrinevich)
-
