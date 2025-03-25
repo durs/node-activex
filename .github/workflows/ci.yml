@@ -22,5 +22,5 @@ jobs:
         run: choco install office365proplus
       - run: |
           npm install -g mocha
-          # mocha --expose-gc test  # Three tests will fail!
+          mocha --expose-gc test  # Three tests will fail!
       - run: npm test
