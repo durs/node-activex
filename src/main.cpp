@@ -11,7 +11,7 @@
 
 // Initialize this addon
 NODE_MODULE_INIT(/*exports, module, context*/) {
-  Isolate* isolate = context->GetIsolate();
+  Isolate* isolate = v8::Isolate::GetCurrent();
 
   DispObject::NodeInit(exports, isolate, context);
   VariantObject::NodeInit(exports, isolate, context);
