@@ -11,7 +11,7 @@
 
 // Initialize this addon
 NODE_MODULE_INIT(/*exports, module, context*/) {
-  Isolate* isolate = v8::Isolate::GetCurrent();
+  Isolate* isolate = Isolate::GetCurrent();
 
   DispObject::NodeInit(exports, isolate, context);
   VariantObject::NodeInit(exports, isolate, context);
@@ -47,7 +47,7 @@ NODE_MODULE_INIT(/*exports, module, context*/) {
 //----------------------------------------------------------------------------------
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ulReason, LPVOID lpReserved) {
-	
+    
     switch (ulReason) {
     case DLL_PROCESS_ATTACH:
         CoInitialize(0);
