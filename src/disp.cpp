@@ -1115,11 +1115,17 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& 
         if ((self->value.vt & VT_ARRAY) != 0) {
             args.GetReturnValue().Set((uint32_t)self->value.ArrayLength());
         }
-    }
+		else {
+			args.GetReturnValue().SetUndefined();
+		}
+	}
     else {
         Local<Function> func;
         if (clazz_methods.get(isolate, id, &func)) {
             args.GetReturnValue().Set(func);
+        }
+        else {
+            args.GetReturnValue().SetUndefined();
         }
     }
 }
