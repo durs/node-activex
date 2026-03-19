@@ -294,7 +294,7 @@ public:
     template<typename T>
     static inline T *Unwrap(Local<Object> handle) {
         if (handle.IsEmpty() || handle->InternalFieldCount() == 0) {
-            return NULL;
+            return nullptr;
         }
         void *ptr = nullptr;
 #if defined(V8_MAJOR_VERSION) && V8_MAJOR_VERSION >= 14
