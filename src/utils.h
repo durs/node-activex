@@ -297,7 +297,8 @@ public:
             return nullptr;
         }
         void *ptr = nullptr;
-#if defined(V8_MAJOR_VERSION) && V8_MAJOR_VERSION >= 14
+
+#if (V8_MAJOR_VERSION > 14 || (V8_MAJOR_VERSION == 14 && V8_MINOR_VERSION >= 3))
         ptr = handle->GetAlignedPointerFromInternalField(0, v8::kEmbedderDataTypeTagDefault);
 #else
         ptr = handle->GetAlignedPointerFromInternalField(0);

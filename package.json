@@ -1,6 +1,6 @@
 {
   "name": "winax",
-  "version": "3.6.6",
+  "version": "3.6.8",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
