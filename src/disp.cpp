@@ -1104,9 +1104,18 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& 
         std::wstring type, name;
         if (self->value.vt & VT_BYREF) type += L"byref:";
         if (self->value.vt & VT_ARRAY) type = L"array:";
-        if (vtypes.find(self->value.vt & VT_TYPEMASK, name)) type += name;
-        else type += std::to_wstring(self->value.vt & VT_TYPEMASK);
+        if (vtypes.find(self->value.vt & VT_TYPEMASK, name)) {
+            type += name;
+        }
+        else if (self->value.vt & VT_UNKNOWN) {
+            type += L"IUnknown";
+        }
+        else {
+            type += std::to_wstring(self->value.vt & VT_TYPEMASK);
+        }
         Local<String> text = v8str(isolate, type.c_str());
+        // Debugger was crashing on IUnknown due to missing return value here
+        args.GetReturnValue().Set(text);
     }
     else if (_wcsicmp(id, L"__proto__") == 0) {
         Local<Function> func;
@@ -1123,10 +1132,10 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& 
         if ((self->value.vt & VT_ARRAY) != 0) {
             args.GetReturnValue().Set((uint32_t)self->value.ArrayLength());
         }
-		else {
-			args.GetReturnValue().SetUndefined();
-		}
-	}
+        else {
+            args.GetReturnValue().SetUndefined();
+        }
+    }
     else {
         Local<Function> func;
         if (clazz_methods.get(isolate, id, &func)) {
