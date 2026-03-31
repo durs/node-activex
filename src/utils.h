@@ -62,6 +62,17 @@ inline Local<String> v8str(Isolate *isolate, const wchar_t *text) {
     return v8str(isolate, (const uint16_t *)text);
 }
 
+template <class T>
+using is_holder_v2 = std::is_member_function_pointer<decltype(&T::HolderV2)>;
+ 
+template<class T>
+inline std::enable_if<!is_holder_v2<T>::value, Local<Object>>::type
+v8this(const T& args) { return args.This(); }
+
+template<class T>
+inline std::enable_if<is_holder_v2<T>::value, Local<Object>>::type
+v8this(const T& args) { return args.HolderV2();  }
+
 //-------------------------------------------------------------------------------------------------------
 #ifndef USE_ATL
 

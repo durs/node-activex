@@ -248,13 +248,21 @@ npm install --debug
 ```
 or using node-gyp directly
 ```
+npm install -g node_gyp
 node-gyp configure
 node-gyp build
+node-gyp rebuild
 ```
 
 For Electron users, need rebuild with a different V8 version:
 ```
-npm rebuild winax --runtime=electron --target=12.22.0 --dist-url=https://electronjs.org/headers --build-from-source
+npm rebuild winax --runtime=electron --target=41.1.0 --arch=x64 --dist-url=https://electronjs.org/headers
+```
+or using electron rebuild module
+```
+npm install --save-dev @electron/rebuild
+.\node_modules\.bin\electron-rebuild.cmd 
+
 ```
 Change --target value to your electron version.
 See also Electron Documentation: [Using Native Node Modules](https://electron.atom.io/docs/tutorial/using-native-node-modules/).

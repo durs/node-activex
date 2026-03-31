@@ -152,7 +152,7 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfoGetter 
         CComPtr<IDispatch> ptr;
         if (VariantDispGet(&value, &ptr)) {
             DispInfoPtr disp_result(new DispInfo(ptr, tag, options, &disp));
-            Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp_result, tag, DISPID_UNKNOWN, -1, opt);
+            Local<Object> result = DispObject::NodeCreate(isolate, v8this(args), disp_result, tag, DISPID_UNKNOWN, -1, opt);
             args.GetReturnValue().Set(result);
         }
         else {
@@ -162,7 +162,7 @@ bool DispObject::get(LPOLESTR tag, LONG index, const PropertyCallbackInfoGetter 
 
     // Return as dispatch object 
     else {
-        Local<Object> result = DispObject::NodeCreate(isolate, args.This(), disp, tag, propid, index, opt);
+        Local<Object> result = DispObject::NodeCreate(isolate, v8this(args), disp, tag, propid, index, opt);
         args.GetReturnValue().Set(result);
     }
     return true;
@@ -612,7 +612,7 @@ void DispObject::NodeCreate(const FunctionCallbackInfo<Value> &args) {
 
 void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& args) {
     Isolate *isolate = args.GetIsolate();
-    DispObject *self = DispObject::Unwrap<DispObject>(args.This());
+    DispObject *self = DispObject::Unwrap<DispObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -622,7 +622,7 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& arg
     NODE_DEBUG_FMT2("DispObject '%S.%S' get", self->name.c_str(), id);
     if (_wcsicmp(id, L"__value") == 0) {
         Local<Value> result;
-        HRESULT hrcode = self->valueOf(isolate, args.This(), result);
+        HRESULT hrcode = self->valueOf(isolate, v8this(args), result);
         if FAILED(hrcode) isolate->ThrowException(Win32Error(isolate, hrcode, L"DispValueOf"));
         else args.GetReturnValue().Set(result);
     }
@@ -669,7 +669,7 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& arg
 
         else if (!self->get(id, -1, args)) {
             Local<Value> result;
-            HRESULT hrcode = self->valueOf(isolate, args.This(), result);
+            HRESULT hrcode = self->valueOf(isolate, v8this(args), result);
             if FAILED(hrcode) isolate->ThrowException(Win32Error(isolate, hrcode, L"Unable to Get Value"));
             
             Local<Context> ctx = isolate->GetCurrentContext();
@@ -701,7 +701,7 @@ void DispObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& arg
 
 void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter& args) {
     Isolate *isolate = args.GetIsolate();
-    DispObject *self = DispObject::Unwrap<DispObject>(args.This());
+    DispObject *self = DispObject::Unwrap<DispObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -712,7 +712,7 @@ void DispObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter
 
 void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCallbackInfoSetter& args) {
     Isolate *isolate = args.GetIsolate();
-    DispObject *self = DispObject::Unwrap<DispObject>(args.This());
+    DispObject *self = DispObject::Unwrap<DispObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -725,7 +725,7 @@ void DispObject::NodeSet(Local<Name> name, Local<Value> value, const PropertyCal
 
 void DispObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter& args) {
     Isolate *isolate = args.GetIsolate();
-    DispObject *self = DispObject::Unwrap<DispObject>(args.This());
+    DispObject *self = DispObject::Unwrap<DispObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -1088,7 +1088,7 @@ void VariantObject::NodeToString(const FunctionCallbackInfo<Value>& args) {
 
 void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& args) {
     Isolate *isolate = args.GetIsolate();
-    VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+    VariantObject *self = VariantObject::Unwrap<VariantObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -1140,7 +1140,7 @@ void VariantObject::NodeGet(Local<Name> name, const PropertyCallbackInfoGetter& 
 
 void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGetter& args) {
     Isolate *isolate = args.GetIsolate();
-    VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+    VariantObject *self = VariantObject::Unwrap<VariantObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -1160,7 +1160,7 @@ void VariantObject::NodeGetByIndex(uint32_t index, const PropertyCallbackInfoGet
 
 void VariantObject::NodeSet(Local<Name> name, Local<Value> val, const PropertyCallbackInfoSetter& args) {
     Isolate *isolate = args.GetIsolate();
-    VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+    VariantObject *self = VariantObject::Unwrap<VariantObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
@@ -1170,7 +1170,7 @@ void VariantObject::NodeSet(Local<Name> name, Local<Value> val, const PropertyCa
 
 void VariantObject::NodeSetByIndex(uint32_t index, Local<Value> value, const PropertyCallbackInfoSetter& args) {
     Isolate *isolate = args.GetIsolate();
-    VariantObject *self = VariantObject::Unwrap<VariantObject>(args.This());
+    VariantObject *self = VariantObject::Unwrap<VariantObject>(v8this(args));
     if (!self) {
         isolate->ThrowException(DispErrorInvalid(isolate));
         return;
