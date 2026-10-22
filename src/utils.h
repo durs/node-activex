@@ -25,7 +25,13 @@
 #if (V8_MAJOR_VERSION >= 12)
 #define NODE_INTERCEPTED
 typedef PropertyCallbackInfo<Value> PropertyCallbackInfoGetter;
+#if (V8_MAJOR_VERSION >= 15)
+// V8 15.6 (Electron 45) only accepts setter callbacks taking PropertyCallbackInfo<Boolean>
+// (NamedPropertySetterCallbackV2 / IndexedPropertySetterCallback). It is already accepted by 15.0 and 15.2.
+typedef PropertyCallbackInfo<Boolean> PropertyCallbackInfoSetter;
+#else
 typedef PropertyCallbackInfo<void> PropertyCallbackInfoSetter;
+#endif
 #else
 typedef PropertyCallbackInfo<Value> PropertyCallbackInfoGetter;
 typedef PropertyCallbackInfo<Value> PropertyCallbackInfoSetter;
@@ -62,16 +68,24 @@ inline Local<String> v8str(Isolate *isolate, const wchar_t *text) {
     return v8str(isolate, (const uint16_t *)text);
 }
 
+// Object targeted by a callback: This() for a FunctionCallbackInfo, HolderV2() for a PropertyCallbackInfo
+// while it exists (up to V8 15.2 at least), and Holder() for a PropertyCallbackInfo once HolderV2() is gone (V8 15.6).
+template <class T, class = void>
+struct has_holder_v2 : std::false_type {};
 template <class T>
-using is_holder_v2 = std::is_member_function_pointer<decltype(&T::HolderV2)>;
- 
-template<class T>
-inline std::enable_if<!is_holder_v2<T>::value, Local<Object>>::type
-v8this(const T& args) { return args.This(); }
+struct has_holder_v2<T, std::void_t<decltype(std::declval<const T&>().HolderV2())>> : std::true_type {};
+
+template <class T, class = void>
+struct has_this : std::false_type {};
+template <class T>
+struct has_this<T, std::void_t<decltype(std::declval<const T&>().This())>> : std::true_type {};
 
 template<class T>
-inline std::enable_if<is_holder_v2<T>::value, Local<Object>>::type
-v8this(const T& args) { return args.HolderV2();  }
+inline Local<Object> v8this(const T& args) {
+    if constexpr (has_holder_v2<T>::value) { return args.HolderV2(); }
+    else if constexpr (has_this<T>::value) { return args.This(); }
+    else { return args.Holder(); }
+}
 
 //-------------------------------------------------------------------------------------------------------
 #ifndef USE_ATL
