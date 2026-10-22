@@ -1,6 +1,6 @@
 {
   "name": "winax",
-  "version": "3.6.9",
+  "version": "3.6.10",
   "description": "Windows COM bindings",
   "homepage": "https://github.com/durs/node-activex",
   "keywords": [
@@ -31,7 +31,8 @@
     "Yuri Dursin <yuri.dursin@gmail.com>",
     "Somanuell",
     "Daniel-Userlane",
-    "Alexey Grinevich <alexey.grinevich@inflectra.com>"
+    "Alexey Grinevich <alexey.grinevich@inflectra.com>",
+    "Rémi <remi@remi-weil.fr>"
   ],
   "repository": {
     "type": "git",

@@ -231,7 +231,7 @@ Check the source code [`src/disp.h`](src/disp.h) and [`src/utils.h`](src/utils.h
 
 This project uses Visual C++ 2013 (or later versions then support C++11 standard).
 Bulding also requires node-gyp and python 2.6 (or later) to be installed. 
-Supported NodeJS Versions (x86 or x64): 10, 12, 16, 18, 20, 22, 23 
+Supported NodeJS Versions (x86 or x64): 10, 12, 16, 18, 20, 22, 24, 26  
 You can do this with npm:
 ```
 npm install --global --production windows-build-tools
@@ -335,3 +335,4 @@ mocha --expose-gc test
 * [somanuell](https://github.com/somanuell)
 * [Daniel-Userlane](https://github.com/Daniel-Userlane)
 * [alexeygrinevich](https://github.com/alexeygrinevich)
+* [Rémi](https://github.com/remicrobe)
